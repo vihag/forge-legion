@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+
 from services.case_api.app import create_app
 
 from .support import add_evidence, ingest, triage

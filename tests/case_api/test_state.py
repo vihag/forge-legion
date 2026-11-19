@@ -1,6 +1,7 @@
 """The transition table allows only the moves in contract §2."""
 
 import pytest
+
 from contracts.models import CaseStatus
 from services.case_api.state import TRANSITIONS, TransitionDenied, check_transition
 

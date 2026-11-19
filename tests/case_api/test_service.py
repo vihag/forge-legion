@@ -1,6 +1,7 @@
 """CaseService runs with an in-memory store and FakeSoarClient, and no HTTP."""
 
 import pytest
+
 from contracts.models import (
     Actor,
     CaseCreate,

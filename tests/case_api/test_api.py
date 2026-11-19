@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+
 from services.case_api.app import create_app
 from services.case_api.soar import FakeSoarClient
 from services.case_api.store import Store

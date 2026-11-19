@@ -2,6 +2,10 @@
 
 from typing import Annotated, Any
 
+from fastapi import APIRouter, Depends, FastAPI, Query, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
 from contracts.models import (
     AuditEvent,
     Case,
@@ -25,10 +29,6 @@ from contracts.models import (
     SoarSubmitRequest,
     TriageCreate,
 )
-from fastapi import APIRouter, Depends, FastAPI, Query, Request
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-
 from services.case_api.errors import CaseError
 from services.case_api.service import (
     CASE_PAGE_DEFAULT,

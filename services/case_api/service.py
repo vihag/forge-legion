@@ -31,7 +31,6 @@ from contracts.models import (
     SoarSubmitRequest,
     TriageCreate,
 )
-
 from services.case_api.errors import (
     Conflict,
     DomainValidationError,
