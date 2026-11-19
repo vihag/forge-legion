@@ -35,24 +35,24 @@
             }
           },
           "409": {
+            "description": "Conflicting resubmission",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            },
-            "description": "Conflict"
+            }
           },
           "422": {
+            "description": "Validation error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            },
-            "description": "Unprocessable Entity"
+            }
           },
           "201": {
             "content": {
@@ -102,14 +102,14 @@
             }
           },
           "422": {
+            "description": "Validation error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            },
-            "description": "Unprocessable Entity"
+            }
           }
         }
       }
@@ -144,14 +144,14 @@
             }
           },
           "404": {
+            "description": "Submission not found",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            },
-            "description": "Not Found"
+            }
           },
           "422": {
             "description": "Validation Error",
