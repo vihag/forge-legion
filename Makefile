@@ -70,6 +70,7 @@ reset: _check_env
 		echo 'Step 3: mock splunk reset'; \
 		curl -sf -X POST "$$PUBLIC_BASE_URL/splunk/v1/reset" -H 'content-type: application/json' -d '{}'; \
 	} || { echo 'reset failed at step 3 (mock_splunk)' >&2; exit 1; }; \
+	$(COMPOSE) restart triage_worker || true; \
 	$(MAKE) health
 
 health: _check_env
@@ -83,3 +84,19 @@ triage-seed: _check_env
 
 compose-config:
 	$(COMPOSE) config -q
+
+stream-start: _check_env
+	@set -a && . ./$(ENV_FILE) && set +a; \
+	curl -sf -X POST "$$PUBLIC_BASE_URL/splunk/v1/stream/start" -H 'content-type: application/json' -d '{}'
+
+stream-stop: _check_env
+	@set -a && . ./$(ENV_FILE) && set +a; \
+	curl -sf -X POST "$$PUBLIC_BASE_URL/splunk/v1/stream/stop" -H 'content-type: application/json' -d '{}'
+
+stream-status: _check_env
+	@set -a && . ./$(ENV_FILE) && set +a; \
+	curl -sf "$$PUBLIC_BASE_URL/splunk/v1/stream/status"
+
+scenarios-check:
+	$(PYTHON) -m services.mock_splunk.scenarios check --world config/world.yaml --dir config/scenarios
+	$(PYTHON) -m services.mock_splunk.scenarios check --world tests/fixtures/scenarios/world.yaml --dir tests/fixtures/scenarios

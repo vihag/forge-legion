@@ -1,0 +1,35 @@
+id: auto-benign-19
+title: auto benign 19
+splunk_rule_name: auto benign 19
+splunk_severity: low
+outcome_class: auto_benign
+weight: 1
+mitre_techniques:
+- T1078
+entities:
+  user:
+    pick:
+      kind: user
+      where:
+        pool: routine
+  host:
+    pick:
+      kind: host
+      where:
+        pool: routine
+alert:
+  title: auto benign 19
+  description: Activity for ${user.id} on ${host.id}
+  fields: {}
+evidence:
+- source: auth
+  sourcetype: WinEventLog:Security
+  offset_s: -30
+  fields:
+    user: ${user.id}
+    host: ${host.id}
+- source: proxy
+  sourcetype: bluecoat:proxy
+  offset_s: 10
+  fields:
+    src_host: ${host.id}

@@ -1,0 +1,36 @@
+id: hitl-downgrade-04
+title: downgrade path
+splunk_rule_name: downgrade path
+splunk_severity: high
+outcome_class: hitl_downgrade
+weight: 1
+mitre_techniques:
+- T1078
+entities:
+  user:
+    pick:
+      kind: user
+      where:
+        pool: hitl
+  host:
+    pick:
+      kind: host
+      where:
+        pool: hitl
+alert:
+  title: downgrade path
+  description: Activity for ${user.id} on ${host.id}
+  fields: {}
+evidence:
+- source: auth
+  sourcetype: WinEventLog:Security
+  offset_s: -30
+  fields:
+    user: ${user.id}
+    host: ${host.id}
+- source: proxy
+  sourcetype: bluecoat:proxy
+  offset_s: 10
+  fields:
+    src_host: ${host.id}
+assessed_severity: medium

@@ -14,6 +14,9 @@ from contracts.mock_splunk import (
     ResetRequest,
     ResetResponse,
     SourceList,
+    StreamStartRequest,
+    StreamStatus,
+    StreamStopRequest,
 )
 from contracts.models import ErrorResponse, HealthResponse, Severity
 from services.mock_splunk.errors import SplunkError
@@ -135,9 +138,9 @@ def list_alert_evidence(
 )
 def query_evidence(
     store: StoreDep,
-    source: Annotated[str, Query(min_length=1)],
     start: Annotated[str, Query(min_length=1)],
     end: Annotated[str, Query(min_length=1)],
+    source: Annotated[str | None, Query()] = None,
     entity: Annotated[str | None, Query()] = None,
 ) -> EvidenceList:
     return store.evidence_by_window(source=source, start=start, end=end, entity=entity)
@@ -156,6 +159,37 @@ def list_sources(store: StoreDep) -> SourceList:
 )
 def reset_fixtures(_body: ResetRequest, store: StoreDep) -> ResetResponse:
     return store.reset()
+
+
+@router.post(
+    "/stream/start",
+    response_model=StreamStatus,
+    operation_id="stream_start",
+    responses=_errors(422),
+)
+def stream_start(body: StreamStartRequest, store: StoreDep) -> StreamStatus:
+    store.stream_start(body)
+    return StreamStatus.model_validate(store.stream_status())
+
+
+@router.post(
+    "/stream/stop",
+    response_model=StreamStatus,
+    operation_id="stream_stop",
+    responses=_errors(422),
+)
+def stream_stop(_body: StreamStopRequest, store: StoreDep) -> StreamStatus:
+    store.stream_stop()
+    return StreamStatus.model_validate(store.stream_status())
+
+
+@router.get(
+    "/stream/status",
+    response_model=StreamStatus,
+    operation_id="stream_status",
+)
+def stream_status(store: StoreDep) -> StreamStatus:
+    return StreamStatus.model_validate(store.stream_status())
 
 
 @router.post(

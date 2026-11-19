@@ -212,16 +212,6 @@
         "operationId": "query_evidence",
         "parameters": [
           {
-            "name": "source",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "title": "Source"
-            }
-          },
-          {
             "name": "start",
             "in": "query",
             "required": true,
@@ -239,6 +229,22 @@
               "type": "string",
               "minLength": 1,
               "title": "End"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
             }
           },
           {
@@ -337,6 +343,109 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stream/start": {
+      "post": {
+        "tags": [
+          "splunk"
+        ],
+        "summary": "Stream Start",
+        "operationId": "stream_start",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StreamStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stream/stop": {
+      "post": {
+        "tags": [
+          "splunk"
+        ],
+        "summary": "Stream Stop",
+        "operationId": "stream_stop",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StreamStopRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stream/status": {
+      "get": {
+        "tags": [
+          "splunk"
+        ],
+        "summary": "Stream Status",
+        "operationId": "stream_status",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamStatus"
                 }
               }
             }
@@ -485,6 +594,17 @@
           },
           "entities": {
             "$ref": "#/components/schemas/Entities"
+          },
+          "scenario_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenario Id"
           }
         },
         "additionalProperties": false,
@@ -724,7 +844,7 @@
         "properties": {
           "evidence_id": {
             "type": "string",
-            "pattern": "^EV-[A-Z]+-\\d{4}$",
+            "pattern": "^EV-[A-Z]+-\\d{4}(-\\d+)?$",
             "title": "Evidence Id"
           },
           "source": {
@@ -763,6 +883,100 @@
           "content"
         ],
         "title": "SplunkEvidence"
+      },
+      "StreamStartRequest": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "random",
+              "script"
+            ],
+            "title": "Mode",
+            "default": "random"
+          },
+          "rate_per_min": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Per Min"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "StreamStartRequest"
+      },
+      "StreamStatus": {
+        "properties": {
+          "running": {
+            "type": "boolean",
+            "title": "Running"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "rate_per_min": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Rate Per Min"
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed"
+          },
+          "emitted": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Emitted"
+          },
+          "next_index": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Next Index"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "running",
+          "rate_per_min",
+          "seed",
+          "emitted",
+          "next_index"
+        ],
+        "title": "StreamStatus"
+      },
+      "StreamStopRequest": {
+        "properties": {},
+        "additionalProperties": false,
+        "type": "object",
+        "title": "StreamStopRequest",
+        "description": "Empty JSON object for stream stop."
       }
     }
   }

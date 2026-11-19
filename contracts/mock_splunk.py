@@ -6,8 +6,9 @@ from typing import Annotated, Any
 from pydantic import AwareDatetime, Field, PlainSerializer
 
 from contracts.models import APIModel, Severity
+from contracts.scenarios import StreamMode, StreamStartRequest
 
-EVIDENCE_ID_PATTERN = r"^EV-[A-Z]+-\d{4}$"
+EVIDENCE_ID_PATTERN = r"^EV-[A-Z]+-\d{4}(-\d+)?$"
 MITRE_TECHNIQUE_PATTERN = r"^T\d{4}(\.\d{3})?$"
 COUNTRY_CODE_PATTERN = r"^[A-Z]{2}$"
 
@@ -48,6 +49,7 @@ class Alert(APIModel):
     emitted_at: UtcTimestamp
     replay_of: str | None = None
     entities: Entities
+    scenario_id: str | None = None
 
 
 class SplunkEvidence(APIModel):
@@ -90,3 +92,38 @@ class ResetResponse(APIModel):
 
 class ReplayRequest(APIModel):
     alert_id: str = Field(min_length=1)
+
+
+class StreamStatus(APIModel):
+    running: bool
+    mode: str | None = None
+    rate_per_min: int = Field(ge=0)
+    seed: int
+    emitted: int = Field(ge=0)
+    next_index: int = Field(ge=0)
+
+
+class StreamStopRequest(APIModel):
+    """Empty JSON object for stream stop."""
+
+
+__all__ = [
+    "Alert",
+    "AlertPage",
+    "Entities",
+    "EvidenceList",
+    "MitreTechnique",
+    "ReplayRequest",
+    "ResetRequest",
+    "ResetResponse",
+    "SourceList",
+    "SourceSummary",
+    "SplunkEvidence",
+    "StreamMode",
+    "StreamStartRequest",
+    "StreamStatus",
+    "StreamStopRequest",
+    "format_utc",
+]
+
+
