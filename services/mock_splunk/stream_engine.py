@@ -16,7 +16,7 @@ EmitCallback = Callable[[], None]
 class StreamEngine:
     def __init__(self, store: SplunkStore) -> None:
         self._store = store
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._timer: threading.Timer | None = None
         self._running = False
 
