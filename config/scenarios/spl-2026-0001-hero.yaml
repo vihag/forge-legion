@@ -1,0 +1,31 @@
+id: spl-2026-0001-hero
+title: Privileged account login from new country
+splunk_rule_name: Privileged account login from new country
+splunk_severity: medium
+outcome_class: hitl_upgrade
+weight: 0
+mitre_techniques:
+- T1078
+- T1021
+entities:
+  user:
+    ref: user:adm.mtan
+  host:
+    ref: host:FIN-DB-01
+alert:
+  title: 'Privileged account login from new country: ${user.id}'
+  description: Domain admin ${user.id} authenticated via VPN-GW-01 from RO
+  fields: {}
+evidence:
+- source: auth
+  sourcetype: WinEventLog:Security
+  offset_s: -30
+  fields:
+    user: ${user.id}
+    host: ${host.id}
+- source: proxy
+  sourcetype: bluecoat:proxy
+  offset_s: 10
+  fields:
+    src_host: ${host.id}
+demo_slot: 1

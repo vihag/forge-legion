@@ -7,6 +7,15 @@ server {
         return 200 '{"status":"ok"}';
     }
 
+    location = /console {
+        return 302 /console/;
+    }
+
+    location /console/ {
+        alias /app/console/;
+        index index.html;
+    }
+
     location /case/ {
         proxy_pass http://${CASE_API_UPSTREAM}/;
         proxy_set_header Host $http_host;

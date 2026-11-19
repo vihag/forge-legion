@@ -9,12 +9,14 @@ from typing import Any, Literal, TypedDict, cast
 from langgraph.graph import END, StateGraph
 
 from contracts.mock_splunk import Alert, SplunkEvidence, format_utc
-from contracts.models import EvidenceCreate, ReviewFlagCreate, TriageCreate
+from contracts.models import AutoResolveCreate, EvidenceCreate, ReviewFlagCreate, TriageCreate
 from contracts.triage import GrokAssessment, Route, TriageResult
 from services.triage.checks import compute_facts
 from services.triage.clients import (
+    AUTO_RESOLVE_ACTOR,
     TRIAGE_ACTOR,
     AlertNotFound,
+    AutoResolveRejected,
     CaseApiClient,
     DuplicateCaseError,
     SplunkClient,
@@ -108,13 +110,21 @@ def build_graph(deps: TriageDeps) -> StateGraph[TriageState, None, TriageState, 
     def deterministic_checks(state: TriageState) -> TriageState:
         alert = state["alert"]
         evidence = state["splunk_evidence"]
-        facts = compute_facts(alert, evidence, deps.routing.privileged_account_patterns)
+        facts = compute_facts(
+            alert,
+            evidence,
+            deps.routing.privileged_account_patterns,
+            deps.routing.crown_jewel_hosts,
+        )
         return {"facts": facts}
 
     def grok_assess(state: TriageState) -> TriageState:
         alert = state["alert"]
         evidence_payload = _evidence_for_prompt(state["splunk_evidence"])
         user_message = build_user_message(alert, state["facts"], evidence_payload)
+        bind_alert = getattr(deps.grok_client, "bind_alert", None)
+        if bind_alert is not None:
+            bind_alert(alert)
         try:
             raw = deps.grok_client.assess(
                 user_message,
@@ -200,7 +210,7 @@ def build_graph(deps: TriageDeps) -> StateGraph[TriageState, None, TriageState, 
             "alert_triggered_at": format_utc(alert.triggered_at),
             "alert_mitre_techniques": list(alert.mitre_techniques),
         }
-        deps.case_client.add_evidence(
+        assessment_evidence = deps.case_client.add_evidence(
             case_id,
             EvidenceCreate(
                 source="triage_assessment",
@@ -220,6 +230,9 @@ def build_graph(deps: TriageDeps) -> StateGraph[TriageState, None, TriageState, 
             f"Triggered: {format_utc(alert.triggered_at)}."
         )
         rationale = assessment.rationale + trailer
+        usage = grok_raw.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens")
+        completion_tokens = usage.get("completion_tokens")
         deps.case_client.triage(
             case_id,
             TriageCreate(
@@ -227,8 +240,30 @@ def build_graph(deps: TriageDeps) -> StateGraph[TriageState, None, TriageState, 
                 rationale=rationale,
                 model=str(grok_raw["model_returned"]),
                 actor=TRIAGE_ACTOR,
+                model_requested=deps.model_requested,
+                route=route_value,
+                rule=rule,
+                verdict=assessment.verdict,
+                recommended_action=assessment.recommended_action,
+                confidence=assessment.assessment_confidence,
+                privileged_account=bool(state["facts"].get("privileged_account")),
+                crown_jewel_asset=bool(state["facts"].get("crown_jewel_asset")),
+                prompt_tokens=prompt_tokens if isinstance(prompt_tokens, int) else None,
+                completion_tokens=completion_tokens if isinstance(completion_tokens, int) else None,
             ),
         )
+        if route_value == "autonomous":
+            try:
+                deps.case_client.auto_resolve(
+                    case_id,
+                    AutoResolveCreate(
+                        policy_id="autonomous-triage",
+                        triage_evidence_id=assessment_evidence.id,
+                        actor=AUTO_RESOLVE_ACTOR,
+                    ),
+                )
+            except AutoResolveRejected:
+                pass
         return {"outcome": "triaged"}
 
     def flag_review(state: TriageState) -> TriageState:

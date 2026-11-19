@@ -1,0 +1,35 @@
+id: routine-o365-new-device
+title: O365 new device registration
+splunk_rule_name: O365 new device registration
+splunk_severity: low
+outcome_class: auto_benign
+weight: 10
+mitre_techniques:
+- T1078
+entities:
+  user:
+    pick:
+      kind: user
+      where:
+        pool: routine
+  host:
+    pick:
+      kind: host
+      where:
+        pool: routine
+alert:
+  title: O365 new device registration
+  description: Activity for ${user.id} on ${host.id}
+  fields: {}
+evidence:
+- source: auth
+  sourcetype: WinEventLog:Security
+  offset_s: -30
+  fields:
+    user: ${user.id}
+    host: ${host.id}
+- source: proxy
+  sourcetype: bluecoat:proxy
+  offset_s: 10
+  fields:
+    src_host: ${host.id}

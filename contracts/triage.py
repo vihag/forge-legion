@@ -5,7 +5,14 @@ from typing import Literal
 from pydantic import Field
 
 from contracts.mock_splunk import MitreTechnique
-from contracts.models import APIModel, ReviewFlagCreate, ReviewFlagReason, Severity
+from contracts.models import (
+    APIModel,
+    RecommendedAction,
+    ReviewFlagCreate,
+    ReviewFlagReason,
+    Severity,
+    Verdict,
+)
 
 Route = Literal["collaborative", "autonomous", "review"]
 TriageOutcome = Literal["triaged", "needs_review", "skipped_existing"]
@@ -20,6 +27,8 @@ class GrokAssessment(APIModel):
     mitre_techniques: list[MitreTechnique] = Field(default_factory=list)
     recommended_route: Route
     additional_evidence_needed: list[str] = Field(default_factory=list)
+    verdict: Verdict | None = None
+    recommended_action: RecommendedAction | None = None
 
 class TriageResult(APIModel):
     alert_id: str

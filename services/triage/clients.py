@@ -5,11 +5,13 @@ from typing import Any, Protocol, cast
 import httpx
 
 from contracts.ingest_mapping import alert_to_case_create, evidence_to_evidence_create
-from contracts.mock_splunk import Alert, EvidenceList, SplunkEvidence
+from contracts.mock_splunk import Alert, AlertPage, EvidenceList, SplunkEvidence
 from contracts.models import (
     Actor,
+    AutoResolveCreate,
     Case,
     CaseList,
+    CaseView,
     Evidence,
     EvidenceCreate,
     ReviewFlagCreate,
@@ -75,6 +77,21 @@ class CaseApiClient:
         response.raise_for_status()
         return Case.model_validate(response.json())
 
+    def auto_resolve(self, case_id: int, body: AutoResolveCreate) -> Case:
+        response = self._client.post(
+            f"/v1/cases/{case_id}/auto-resolve",
+            json=body.model_dump(mode="json"),
+        )
+        if response.status_code == 409:
+            raise AutoResolveRejected(response.json())
+        response.raise_for_status()
+        return Case.model_validate(response.json())
+
+    def get_case_view(self, case_id: int) -> CaseView:
+        response = self._client.get(f"/v1/cases/{case_id}/view")
+        response.raise_for_status()
+        return CaseView.model_validate(response.json())
+
 
 class SplunkClient:
     def __init__(self, base_url: str, *, transport: httpx.BaseTransport | None = None) -> None:
@@ -99,6 +116,19 @@ class SplunkClient:
         response = self._client.post("/v1/reset", json={})
         response.raise_for_status()
 
+    def list_alerts(
+        self,
+        *,
+        after_seq: int = 0,
+        limit: int = 100,
+    ) -> AlertPage:
+        response = self._client.get(
+            "/v1/alerts",
+            params={"after_seq": after_seq, "limit": limit},
+        )
+        response.raise_for_status()
+        return AlertPage.model_validate(response.json())
+
 
 class AlertNotFound(Exception):
     def __init__(self, alert_id: str) -> None:
@@ -112,7 +142,14 @@ class DuplicateCaseError(Exception):
         self.body = body
 
 
+class AutoResolveRejected(Exception):
+    def __init__(self, body: dict[str, Any]) -> None:
+        super().__init__("auto-resolve rejected")
+        self.body = body
+
+
 TRIAGE_ACTOR = Actor(id="triage-langgraph", type="system")
+AUTO_RESOLVE_ACTOR = Actor(id="policy:autonomous-triage", type="system")
 
 
 def ingest_from_alert(case_client: CaseApiClient, alert: Alert) -> Case:

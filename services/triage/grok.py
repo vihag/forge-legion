@@ -9,6 +9,7 @@ from typing import Any, Protocol
 import httpx
 from pydantic import ValidationError
 
+from contracts.mock_splunk import Alert
 from contracts.triage import GrokAssessment
 from services.triage.config import ConfigError
 from services.triage.prompt import SYSTEM_PROMPT
@@ -100,6 +101,52 @@ class HttpGrokClient:
         if response is None:
             raise GrokCallError("grok request failed", detail="no response")
         raise GrokCallError("grok request failed", detail=response.text[:2000])
+
+
+class StreamFixtureGrokClient:
+    """Fixture Grok responses for stream alerts via the template registry."""
+
+    def __init__(self, *, model_requested: str = "fixture") -> None:
+        self._model_requested = model_requested
+        self._bound_alert: Alert | None = None
+
+    @property
+    def model_requested(self) -> str:
+        return self._model_requested
+
+    def bind_alert(self, alert: Alert) -> None:
+        self._bound_alert = alert
+
+    def close(self) -> None:
+        return None
+
+    def assess(self, user_message: str, *, evidence_ids: set[str]) -> GrokResponse:
+        del user_message
+        from services.mock_splunk.stream import fixture_grok_for_alert
+
+        alert = self._bound_alert
+        if alert is None:
+            raise GrokCallError("stream fixture client has no bound alert")
+        scenario_id = alert.scenario_id
+        refs = sorted(evidence_ids)
+        payload = fixture_grok_for_alert(
+            alert.alert_id,
+            scenario_id,
+            evidence_ids=refs,
+        )
+        if payload is None:
+            raise GrokCallError(
+                "no stream fixture for alert",
+                detail=f"alert_id={alert.alert_id}",
+            )
+        response = _parse_fixture_payload(payload)
+        return GrokResponse(
+            response_id=response.response_id,
+            model_returned="fixture",
+            request_id=response.request_id,
+            usage=response.usage,
+            content=response.content,
+        )
 
 
 class FixtureGrokClient:

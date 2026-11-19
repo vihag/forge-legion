@@ -23,6 +23,17 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _find_http_status_error(exc: BaseException) -> httpx.HTTPStatusError | None:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc
+    if isinstance(exc, BaseExceptionGroup):
+        for item in exc.exceptions:
+            found = _find_http_status_error(item)
+            if found is not None:
+                return found
+    return None
+
+
 async def _run_tool(
     *,
     url: str,
@@ -41,10 +52,17 @@ async def _run_tool(
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     result = await session.call_tool(tool, arguments)
-    except httpx.HTTPStatusError as exc:
-        return 4, {"status": exc.response.status_code, "error": "http_error", "message": str(exc)}
-    except httpx.HTTPError as exc:
-        return 4, {"status": 0, "error": "http_error", "message": str(exc)}
+    except BaseException as exc:
+        status_error = _find_http_status_error(exc)
+        if status_error is not None:
+            return 4, {
+                "status": status_error.response.status_code,
+                "error": "http_error",
+                "message": str(status_error),
+            }
+        if isinstance(exc, httpx.HTTPError):
+            return 4, {"status": 0, "error": "http_error", "message": str(exc)}
+        raise
     payload: dict[str, Any] = {
         "isError": result.isError,
         "content": [block.model_dump(mode="json") for block in result.content],

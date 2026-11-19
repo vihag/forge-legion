@@ -40,6 +40,16 @@ class Conflict(CaseError):
     error = "conflict"
 
 
+class PolicyGateFailed(CaseError):
+    status_code = 409
+    error = "policy_gate_failed"
+
+
+class NoAnalystApproval(CaseError):
+    status_code = 409
+    error = "no_analyst_approval"
+
+
 class DomainValidationError(CaseError):
     status_code = 422
     error = "validation_error"

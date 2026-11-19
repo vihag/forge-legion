@@ -1,0 +1,678 @@
+version: 1
+org:
+  name: Forge Demo
+  domain: forge.demo
+  timezone: UTC
+users:
+- id: u.0001
+  name: User 0001
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0002
+  name: User 0002
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0003
+  name: User 0003
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0004
+  name: User 0004
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0005
+  name: User 0005
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0006
+  name: User 0006
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0007
+  name: User 0007
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0008
+  name: User 0008
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0009
+  name: User 0009
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0010
+  name: User 0010
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0011
+  name: User 0011
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0012
+  name: User 0012
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0013
+  name: User 0013
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0014
+  name: User 0014
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0015
+  name: User 0015
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0016
+  name: User 0016
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0017
+  name: User 0017
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0018
+  name: User 0018
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0019
+  name: User 0019
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0020
+  name: User 0020
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0021
+  name: User 0021
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0022
+  name: User 0022
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0023
+  name: User 0023
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0024
+  name: User 0024
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0025
+  name: User 0025
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0026
+  name: User 0026
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0027
+  name: User 0027
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0028
+  name: User 0028
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0029
+  name: User 0029
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0030
+  name: User 0030
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0031
+  name: User 0031
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0032
+  name: User 0032
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0033
+  name: User 0033
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0034
+  name: User 0034
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0035
+  name: User 0035
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0036
+  name: User 0036
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0037
+  name: User 0037
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0038
+  name: User 0038
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0039
+  name: User 0039
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0040
+  name: User 0040
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0041
+  name: User 0041
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0042
+  name: User 0042
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0043
+  name: User 0043
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0044
+  name: User 0044
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0045
+  name: User 0045
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0046
+  name: User 0046
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0047
+  name: User 0047
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0048
+  name: User 0048
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0049
+  name: User 0049
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0050
+  name: User 0050
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0051
+  name: User 0051
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0052
+  name: User 0052
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0053
+  name: User 0053
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0054
+  name: User 0054
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0055
+  name: User 0055
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0056
+  name: User 0056
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0057
+  name: User 0057
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0058
+  name: User 0058
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0059
+  name: User 0059
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: u.0060
+  name: User 0060
+  title: Analyst
+  dept: IT
+  privileged: false
+  home_country: US
+  pool: routine
+- id: adm.mtan
+  name: adm.mtan
+  title: Domain Admin
+  dept: Ops
+  privileged: true
+  home_country: SG
+  pool: hitl
+- id: da-backup
+  name: da-backup
+  title: Backup Admin
+  dept: Ops
+  privileged: true
+  home_country: US
+  pool: hitl
+- id: svc-admin-ops
+  name: svc-admin-ops
+  title: Service Admin
+  dept: Ops
+  privileged: true
+  home_country: US
+  pool: hitl
+- id: adm.deploy
+  name: adm.deploy
+  title: Deploy Admin
+  dept: Ops
+  privileged: true
+  home_country: US
+  pool: hitl
+- id: da-ldap
+  name: da-ldap
+  title: LDAP Admin
+  dept: Ops
+  privileged: true
+  home_country: US
+  pool: hitl
+hosts:
+- id: WS-001
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-002
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-003
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-004
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-005
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-006
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-007
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-008
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-009
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-010
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-011
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-012
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-013
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-014
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-015
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-016
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-017
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-018
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-019
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-020
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-021
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-022
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-023
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-024
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-025
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-026
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-027
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-028
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-029
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: WS-030
+  role: workstation
+  dept: IT
+  os: windows
+  crown_jewel: false
+  pool: routine
+- id: FIN-DB-01
+  role: database
+  dept: Infra
+  os: linux
+  crown_jewel: true
+  pool: hitl
+- id: VPN-GW-01
+  role: vpn
+  dept: Infra
+  os: linux
+  crown_jewel: false
+  pool: hitl
+- id: DC-01
+  role: domain_controller
+  dept: Infra
+  os: linux
+  crown_jewel: false
+  pool: hitl
+- id: SQL-PROD-01
+  role: database
+  dept: Infra
+  os: linux
+  crown_jewel: false
+  pool: hitl
+- id: JMP-01
+  role: jump
+  dept: Infra
+  os: linux
+  crown_jewel: false
+  pool: hitl
+domains:
+- domain: contoso.com
+  sanctioned: true
+  purpose: corp
+internal_cidrs:
+- 10.0.0.0/8

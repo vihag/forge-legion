@@ -31,6 +31,18 @@ jobs:
       - name: Mypy
         run: mypy
 
+  scenarios-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Scenario fixtures
+        run: make scenarios-check
+
   pytest:
     runs-on: ubuntu-latest
     steps:
@@ -42,6 +54,12 @@ jobs:
         run: pip install -e ".[dev]"
       - name: Pytest
         run: pytest
+      - name: Pytest with .env.example only (X2)
+        run: |
+          set -a
+          eval "$(grep -v '^#' .env.example | grep '=' | sed 's/^/export /')"
+          set +a
+          pytest
 
   openapi:
     runs-on: ubuntu-latest
@@ -67,15 +85,22 @@ jobs:
       - name: Prepare env
         run: |
           cp .env.example .env.local
-          printf '\nGROK_CLIENT=fixture\nMCP_ADAPTER_TOKEN=ci-boot-smoke-token\n' >> .env.local
+          printf '\nGROK_CLIENT=fixture\nGROK_FIXTURE_PATH=\nMCP_ADAPTER_TOKEN=ci-boot-smoke-token\nAUTO_RESOLVE_ENABLED=1\nSTREAM_RATE_PER_MIN=60\n' >> .env.local
       - name: Compose up and health
         run: |
-          make up
+          # Hold the worker back until the seed is triaged: its stream fixture
+          # client has no response for SPL-2026-0001 and would send it to review.
+          docker compose --env-file .env.local -f deploy/compose.yml up -d --build --wait --scale triage_worker=0
           make health
       - name: Triage seed
         run: |
-          make triage-seed 2>triage.stderr | tee triage.json
+          set -o pipefail
+          COMPOSE_PROGRESS=quiet docker compose --env-file .env.local -f deploy/compose.yml --profile tools run --rm -T \
+            -e GROK_FIXTURE_PATH=/app/tests/triage/fixtures/grok_seed_ok.json \
+            triage 2>triage.stderr | tee triage.json || { cat triage.stderr; exit 1; }
           python scripts/assert_seed_triaged.py triage.json
+      - name: Start triage worker
+        run: docker compose --env-file .env.local -f deploy/compose.yml up -d --wait --scale triage_worker=1 triage_worker
       - name: Health fails when SOAR is down
         run: |
           set -o pipefail
@@ -136,10 +161,64 @@ jobs:
               mcp_code = exc.code
           assert mcp_code == 401
           assert fetch(f"http://nginx:{local_port}/case/v1/cases") == 200
+          assert fetch(f"http://nginx:{public_port}/console/") == 404
+          assert fetch(f"http://nginx:{public_port}/case/v1/metrics") == 404
           PY
+      - name: Console on local gateway
+        run: |
+          set -a && . ./.env.local && set +a
+          docker compose --env-file .env.local -f deploy/compose.yml exec -T case_api python - <<'PY'
+          import os
+          import urllib.request
+
+          port = os.environ.get("GATEWAY_PORT", "8080")
+          with urllib.request.urlopen(f"http://nginx:{port}/console/") as resp:
+              body = resp.read().decode("utf-8")
+              assert resp.getcode() == 200, resp.getcode()
+          assert "SIMULATED SHIFT" in body
+          PY
+      - name: Stream and metrics smoke
+        run: |
+          set -a && . ./.env.local && set +a
+          base="${PUBLIC_BASE_URL:-http://localhost:8080}"
+          base="${base%/}"
+          curl -f --max-time 30 -X POST "${base}/splunk/v1/stream/stop" \
+            -H 'content-type: application/json' -d '{}' || true
+          curl -f --max-time 30 -X POST "${base}/splunk/v1/stream/start" \
+            -H 'content-type: application/json' -d '{"mode":"random"}'
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          import urllib.request
+
+          base = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8080").rstrip("/")
+          deadline = time.time() + 120
+          last: dict[str, object] | None = None
+          while time.time() < deadline:
+              with urllib.request.urlopen(f"{base}/case/v1/metrics", timeout=30) as resp:
+                  last = json.loads(resp.read().decode("utf-8"))
+              counts = last.get("counts", {}) if isinstance(last, dict) else {}
+              total = int(counts.get("total", 0))
+              auto_resolved = int(counts.get("auto_resolved", 0))
+              if total >= 3 and auto_resolved >= 1:
+                  print(json.dumps(counts))
+                  raise SystemExit(0)
+              time.sleep(5)
+          print(
+              f"stream metrics smoke timed out: {json.dumps(last)}",
+              file=sys.stderr,
+          )
+          raise SystemExit(1)
+          PY
+          curl -f --max-time 30 -X POST "${base}/splunk/v1/stream/stop" \
+            -H 'content-type: application/json' -d '{}'
       - name: Reset stores
         run: |
           set -a && . ./.env.local && set +a
+          # Remove the worker so it cannot re-triage the seed after reset.
+          docker compose --env-file .env.local -f deploy/compose.yml up -d --scale triage_worker=0 triage_worker
           make reset
           python - <<'PY'
           import json

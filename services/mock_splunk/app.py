@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from services.mock_splunk.routes import register_routes
 from services.mock_splunk.store import Clock, SplunkStore
+from services.mock_splunk.stream_engine import StreamEngine
 
 
 def create_app(
@@ -14,6 +15,7 @@ def create_app(
 ) -> FastAPI:
     """Build Mock Splunk. ``clock`` is used only for replay ``emitted_at``."""
     store = SplunkStore(fixtures_dir=fixtures_dir, clock=clock)
+    store.bind_stream_engine(StreamEngine(store))
     app = FastAPI(
         title="FORGE Mock Splunk",
         version="1.0.0",

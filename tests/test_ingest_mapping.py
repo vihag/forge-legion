@@ -26,12 +26,14 @@ def test_alert_maps_to_valid_case_create() -> None:
     assert created.summary == alert.summary
     assert created.assigned_analyst is None
     assert created.actor == ACTOR
+    assert created.alert_time == "2026-11-18T02:04:00Z"
     assert set(created.model_dump()) == {
         "alert_id",
         "title",
         "splunk_severity",
         "summary",
         "assigned_analyst",
+        "alert_time",
         "actor",
     }
 

@@ -4,11 +4,18 @@ Lists are ordered by ``(timestamp, evidence_id)`` or by ``seq``. The only
 clock read is ``emitted_at`` on a replay.
 """
 
+from __future__ import annotations
+
 import json
+import os
+import random
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
+
+if TYPE_CHECKING:
+    from services.mock_splunk.stream_engine import StreamEngine
 
 from pydantic import AwareDatetime, BaseModel, Field, ValidationError
 
@@ -261,6 +268,12 @@ class SplunkStore:
         self._evidence: list[SplunkEvidence] = []
         self._replay_counts: dict[str, int] = {}
         self._next_seq = 1
+        self._stream_emitted = 0
+        self._stream_next_index = 0
+        self._stream_mode: str | None = None
+        self._stream_rate_per_min: int | None = None
+        self._stream_seed: int | None = None
+        self._stream_engine: StreamEngine | None = None
         self.reset()
 
     @property
@@ -275,6 +288,8 @@ class SplunkStore:
 
     def reset(self) -> ResetResponse:
         """Reload fixtures, drop replays, and restore seeded sequence numbers."""
+        if self._stream_engine is not None:
+            self._stream_engine.stop()
         loaded = _load_fixtures(self._fixtures_dir)
         self._seed_version = loaded.seed_version
         self._alerts = {alert.alert_id: alert for alert in loaded.alerts}
@@ -282,11 +297,107 @@ class SplunkStore:
         self._evidence = list(loaded.evidence)
         self._replay_counts = {alert.alert_id: 0 for alert in loaded.alerts}
         self._next_seq = max((alert.seq for alert in loaded.alerts), default=0) + 1
+        self._stream_emitted = 0
+        self._stream_next_index = 0
+        self._stream_mode = None
+        self._stream_rate_per_min = None
+        self._stream_seed = None
+        from services.mock_splunk.stream import reset_registry
+
+        reset_registry()
         return ResetResponse(
             seed_version=self._seed_version,
             alerts=len(self._alerts),
             evidence=len(self._evidence),
         )
+
+    def bind_stream_engine(self, engine: StreamEngine) -> None:
+        self._stream_engine = engine
+
+    def stream_start(self, body: Any) -> tuple[bool, dict[str, Any]]:
+        if self._stream_engine is None:
+            raise RuntimeError("stream engine is not configured")
+        from contracts.scenarios import StreamStartRequest
+
+        if isinstance(body, StreamStartRequest):
+            request = body
+        else:
+            request = StreamStartRequest.model_validate(body)
+        self._stream_mode = request.mode
+        self._stream_rate_per_min = (
+            request.rate_per_min
+            if request.rate_per_min is not None
+            else int(os.environ.get("STREAM_RATE_PER_MIN", "3"))
+        )
+        self._stream_seed = (
+            request.seed if request.seed is not None else int(os.environ.get("STREAM_SEED", "42"))
+        )
+        started = self._stream_engine.start()
+        return started, self.stream_status()
+
+    def stream_stop(self) -> tuple[bool, dict[str, Any]]:
+        if self._stream_engine is None:
+            raise RuntimeError("stream engine is not configured")
+        stopped = self._stream_engine.stop()
+        return stopped, self.stream_status()
+
+    def stream_status(self) -> dict[str, Any]:
+        rate = self._stream_rate_per_min or int(os.environ.get("STREAM_RATE_PER_MIN", "3"))
+        seed = self._stream_seed or int(os.environ.get("STREAM_SEED", "42"))
+        running = False if self._stream_engine is None else self._stream_engine.is_running()
+        return {
+            "running": running,
+            "mode": self._stream_mode,
+            "rate_per_min": rate,
+            "seed": seed,
+            "emitted": self._stream_emitted,
+            "next_index": self._stream_next_index,
+        }
+
+    def emit_stream_tick(self) -> None:
+        from services.mock_splunk.stream import generate, list_scenarios, script_schedule
+
+        seed = self._stream_seed or int(os.environ.get("STREAM_SEED", "42"))
+        if self._stream_mode == "script":
+            schedule = script_schedule(list_scenarios())
+            if self._stream_next_index >= len(schedule):
+                if self._stream_engine is not None:
+                    self._stream_engine.stop()
+                return
+            scenario = schedule[self._stream_next_index]
+            from services.mock_splunk import stream as stream_mod
+
+            batch = [
+                stream_mod._emit_one(
+                    scenario=scenario,
+                    stream_index=self._stream_next_index,
+                    clock=self._clock,
+                    rng=random.Random(f"{seed}:entity:{self._stream_next_index}"),
+                )
+            ]
+        else:
+            batch = generate(seed, 1, start_index=self._stream_next_index, clock=self._clock)
+        if not batch:
+            return
+        item = batch[0]
+        self._ingest_stream_item(item)
+        self._stream_emitted += 1
+        self._stream_next_index += 1
+
+    def _ingest_stream_item(self, item: object) -> None:
+        from services.mock_splunk.stream import GeneratedStreamItem
+
+        if not isinstance(item, GeneratedStreamItem):
+            raise TypeError("expected GeneratedStreamItem")
+        alert = item.alert
+        if alert.alert_id in self._alerts:
+            return
+        seq = self._next_seq
+        alert = alert.model_copy(update={"seq": seq})
+        self._next_seq += 1
+        self._alerts[alert.alert_id] = alert
+        self._order.append(alert.alert_id)
+        self._evidence.extend(item.evidence)
 
     def get_alert(self, alert_id: str) -> Alert:
         alert = self._alerts.get(alert_id)
@@ -327,13 +438,14 @@ class SplunkStore:
     def evidence_by_window(
         self,
         *,
-        source: str,
+        source: str | None,
         start: str,
         end: str,
         entity: str | None,
     ) -> EvidenceList:
         """Return evidence with ``start <= timestamp < end`` for one source."""
-        self._require_source(source)
+        if source is not None and source != "*":
+            self._require_source(source)
         start_at = _parse_bound(start, "start")
         end_at = _parse_bound(end, "end")
         if start_at >= end_at:
@@ -349,7 +461,7 @@ class SplunkStore:
         matched = [
             item
             for item in self._evidence
-            if item.source == source
+            if (source is None or source == "*" or item.source == source)
             and start_at <= item.timestamp < end_at
             and (entity is None or _entity_matches(item.entities, entity))
         ]

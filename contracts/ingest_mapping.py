@@ -20,6 +20,7 @@ def alert_to_case_create(alert: Alert, actor: Actor) -> CaseCreate:
         splunk_severity=alert.splunk_severity,
         summary=alert.summary,
         assigned_analyst=None,
+        alert_time=format_utc(alert.triggered_at),
         actor=actor,
     )
 

@@ -290,6 +290,88 @@
         }
       }
     },
+    "/v1/cases/{case_id}/auto-resolve": {
+      "post": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Auto Resolve Case",
+        "operationId": "auto_resolve_case",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoResolveCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Case"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Actor is not an analyst",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Case not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error or instruction mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/cases/{case_id}/review-flag": {
       "post": {
         "tags": [
@@ -976,6 +1058,56 @@
         }
       }
     },
+    "/v1/metrics": {
+      "get": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Get Metrics",
+        "operationId": "get_metrics",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Metrics"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error or instruction mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/healthz": {
       "get": {
         "tags": [
@@ -1099,6 +1231,31 @@
         ],
         "title": "AuditEvent"
       },
+      "AutoResolveCreate": {
+        "properties": {
+          "policy_id": {
+            "type": "string",
+            "const": "autonomous-triage",
+            "title": "Policy Id"
+          },
+          "triage_evidence_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Triage Evidence Id"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "policy_id",
+          "triage_evidence_id",
+          "actor"
+        ],
+        "title": "AutoResolveCreate"
+      },
       "Case": {
         "properties": {
           "id": {
@@ -1194,6 +1351,147 @@
           "updated_at": {
             "type": "string",
             "title": "Updated At"
+          },
+          "alert_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alert Time"
+          },
+          "model_requested": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Requested"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "collaborative",
+                  "autonomous",
+                  "review"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route"
+          },
+          "rule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "benign",
+                  "false_positive",
+                  "suspicious",
+                  "malicious"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          },
+          "recommended_action": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "escalate",
+                  "contain"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Action"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "privileged_account": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Privileged Account"
+          },
+          "crown_jewel_asset": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crown Jewel Asset"
+          },
+          "prompt_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Tokens"
+          },
+          "completion_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Tokens"
           }
         },
         "additionalProperties": false,
@@ -1260,6 +1558,18 @@
             ],
             "title": "Assigned Analyst"
           },
+          "alert_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alert Time"
+          },
           "actor": {
             "$ref": "#/components/schemas/Actor"
           }
@@ -1307,7 +1617,8 @@
           "APPROVED",
           "REJECTED",
           "SUBMITTED",
-          "NEEDS_REVIEW"
+          "NEEDS_REVIEW",
+          "AUTO_RESOLVED"
         ],
         "title": "CaseStatus"
       },
@@ -1500,6 +1811,147 @@
             },
             "type": "array",
             "title": "Audit"
+          },
+          "alert_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alert Time"
+          },
+          "model_requested": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Requested"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "collaborative",
+                  "autonomous",
+                  "review"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route"
+          },
+          "rule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "benign",
+                  "false_positive",
+                  "suspicious",
+                  "malicious"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          },
+          "recommended_action": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "escalate",
+                  "contain"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Action"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "privileged_account": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Privileged Account"
+          },
+          "crown_jewel_asset": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crown Jewel Asset"
+          },
+          "prompt_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Tokens"
+          },
+          "completion_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Tokens"
           }
         },
         "additionalProperties": false,
@@ -2015,6 +2467,335 @@
         ],
         "title": "HealthResponse"
       },
+      "Metrics": {
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/MetricsCounts"
+          },
+          "uplifts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Uplifts"
+          },
+          "downgrades": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Downgrades"
+          },
+          "time_to_triage_s": {
+            "$ref": "#/components/schemas/TimingStats"
+          },
+          "time_to_resolve_s": {
+            "$ref": "#/components/schemas/ResolveTimingStats"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/MetricsTokens"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Usd"
+          },
+          "auto_resolve_enabled": {
+            "type": "boolean",
+            "title": "Auto Resolve Enabled"
+          },
+          "minutes_saved_estimate": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Minutes Saved Estimate"
+          },
+          "assumptions": {
+            "$ref": "#/components/schemas/MetricsAssumptions"
+          },
+          "agents": {
+            "items": {
+              "$ref": "#/components/schemas/MetricsAgent"
+            },
+            "type": "array",
+            "title": "Agents"
+          },
+          "recent": {
+            "items": {
+              "$ref": "#/components/schemas/MetricsRecentCase"
+            },
+            "type": "array",
+            "title": "Recent"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "counts",
+          "uplifts",
+          "downgrades",
+          "time_to_triage_s",
+          "time_to_resolve_s",
+          "tokens",
+          "auto_resolve_enabled",
+          "minutes_saved_estimate",
+          "assumptions",
+          "agents",
+          "recent"
+        ],
+        "title": "Metrics"
+      },
+      "MetricsAgent": {
+        "properties": {
+          "actor_id": {
+            "type": "string",
+            "title": "Actor Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "analyst",
+              "agent",
+              "system"
+            ],
+            "title": "Type"
+          },
+          "events": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Events"
+          },
+          "last_seen": {
+            "type": "string",
+            "title": "Last Seen"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "actor_id",
+          "type",
+          "events",
+          "last_seen"
+        ],
+        "title": "MetricsAgent"
+      },
+      "MetricsAssumptions": {
+        "properties": {
+          "minutes_per_alert": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Minutes Per Alert"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "minutes_per_alert"
+        ],
+        "title": "MetricsAssumptions"
+      },
+      "MetricsCounts": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total"
+          },
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Status"
+          },
+          "by_route": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Route"
+          },
+          "auto_resolved": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Auto Resolved"
+          },
+          "collaborative_open": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Collaborative Open"
+          },
+          "needs_review": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Needs Review"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total",
+          "by_status",
+          "by_route",
+          "auto_resolved",
+          "collaborative_open",
+          "needs_review"
+        ],
+        "title": "MetricsCounts"
+      },
+      "MetricsRecentCase": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "alert_id": {
+            "type": "string",
+            "title": "Alert Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CaseStatus"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "collaborative",
+                  "autonomous",
+                  "review"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route"
+          },
+          "splunk_severity": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "title": "Splunk Severity"
+          },
+          "triage_severity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high",
+                  "critical"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Triage Severity"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "benign",
+                  "false_positive",
+                  "suspicious",
+                  "malicious"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "alert_id",
+          "title",
+          "status",
+          "splunk_severity",
+          "updated_at"
+        ],
+        "title": "MetricsRecentCase"
+      },
+      "MetricsTokens": {
+        "properties": {
+          "prompt": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Prompt"
+          },
+          "completion": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Completion"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total"
+          },
+          "per_case_average": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per Case Average"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prompt",
+          "completion",
+          "total"
+        ],
+        "title": "MetricsTokens"
+      },
+      "ResolveTimingStats": {
+        "properties": {
+          "ai_only": {
+            "$ref": "#/components/schemas/TimingStats"
+          },
+          "ai_plus_human": {
+            "$ref": "#/components/schemas/TimingStats"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ai_only",
+          "ai_plus_human"
+        ],
+        "title": "ResolveTimingStats"
+      },
       "ReviewFlagCreate": {
         "properties": {
           "reason": {
@@ -2097,6 +2878,43 @@
         ],
         "title": "SoarSubmitRequest"
       },
+      "TimingStats": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "N"
+          },
+          "median": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median"
+          },
+          "average": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "n"
+        ],
+        "title": "TimingStats"
+      },
       "TriageCreate": {
         "properties": {
           "severity": {
@@ -2121,6 +2939,138 @@
           },
           "actor": {
             "$ref": "#/components/schemas/Actor"
+          },
+          "model_requested": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Requested"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "collaborative",
+                  "autonomous",
+                  "review"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route"
+          },
+          "rule": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "benign",
+                  "false_positive",
+                  "suspicious",
+                  "malicious"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          },
+          "recommended_action": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "escalate",
+                  "contain"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Action"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "privileged_account": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Privileged Account"
+          },
+          "crown_jewel_asset": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crown Jewel Asset"
+          },
+          "prompt_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Tokens"
+          },
+          "completion_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Tokens"
           }
         },
         "additionalProperties": false,

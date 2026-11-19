@@ -94,6 +94,7 @@ services:
       - "${GATEWAY_BIND}:${GATEWAY_PUBLIC_PORT}:${GATEWAY_PORT}"
     volumes:
       - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ../console:/app/console:ro
     depends_on:
       case_api:
         condition: service_healthy
@@ -103,6 +104,24 @@ services:
         condition: service_healthy
       mcp:
         condition: service_healthy
+
+  triage_worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file:
+      - ../${ENV_FILE:-.env.local}
+    command:
+      - python
+      - -m
+      - services.triage
+      - worker
+    depends_on:
+      case_api:
+        condition: service_healthy
+      mock_splunk:
+        condition: service_healthy
+    restart: unless-stopped
 
   triage:
     profiles:

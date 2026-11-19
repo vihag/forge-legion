@@ -1,0 +1,36 @@
+id: hitl-upgrade-low-04
+title: low to high
+splunk_rule_name: low to high
+splunk_severity: low
+outcome_class: hitl_upgrade
+weight: 1
+mitre_techniques:
+- T1078
+entities:
+  user:
+    pick:
+      kind: user
+      where:
+        pool: hitl
+  host:
+    pick:
+      kind: host
+      where:
+        pool: hitl
+alert:
+  title: low to high
+  description: Activity for ${user.id} on ${host.id}
+  fields: {}
+evidence:
+- source: auth
+  sourcetype: WinEventLog:Security
+  offset_s: -30
+  fields:
+    user: ${user.id}
+    host: ${host.id}
+- source: proxy
+  sourcetype: bluecoat:proxy
+  offset_s: 10
+  fields:
+    src_host: ${host.id}
+assessed_severity: high

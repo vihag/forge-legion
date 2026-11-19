@@ -3,14 +3,17 @@
 Routes, bots, and UIs call this service. They do not decide state.
 """
 
+import os
 import sqlite3
-from datetime import UTC, datetime
+import statistics
+from datetime import UTC, datetime, timedelta
 from typing import Any, Never
 
 from contracts.mock_soar import SoarApproval, SoarSubmissionRequest
 from contracts.models import (
     Actor,
     AuditEvent,
+    AutoResolveCreate,
     Case,
     CaseCreate,
     CaseList,
@@ -28,10 +31,18 @@ from contracts.models import (
     Finding,
     FindingCreate,
     FindingKind,
+    Metrics,
+    MetricsAgent,
+    MetricsAssumptions,
+    MetricsCounts,
+    MetricsRecentCase,
+    MetricsTokens,
+    ResolveTimingStats,
     ReviewFlagCreate,
     Severity,
     SoarSubmission,
     SoarSubmitRequest,
+    TimingStats,
     TriageCreate,
 )
 from services.case_api.errors import (
@@ -41,13 +52,16 @@ from services.case_api.errors import (
     Forbidden,
     IllegalTransition,
     InstructionMismatch,
+    NoAnalystApproval,
     NotFound,
+    PolicyGateFailed,
     SoarUnavailable,
 )
 from services.case_api.soar import SoarClient, SoarError
 from services.case_api.state import (
     ADD_EVIDENCE,
     APPROVE,
+    AUTO_RESOLVE,
     FLAG_REVIEW,
     PROPOSE_DISPOSITION,
     RECORD_FINDING,
@@ -74,6 +88,12 @@ EVENT_APPROVED = "disposition.approved"
 EVENT_REJECTED = "disposition.rejected"
 EVENT_SOAR = "soar.submitted"
 EVENT_REVIEW_FLAGGED = "case.review_flagged"
+EVENT_AUTO_RESOLVED = "case.auto_resolved"
+
+AUTO_RESOLVE_POLICY_ID = "autonomous-triage"
+AUTO_RESOLVE_ACTOR = Actor(id="policy:autonomous-triage", type="system")
+_SEVERITY_RANK = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+_GATE_IDS = tuple(f"G{index}" for index in range(1, 11))
 
 
 def utc_now() -> str:
@@ -164,6 +184,7 @@ class CaseService:
                     summary=body.summary,
                     splunk_severity=body.splunk_severity,
                     assigned_analyst=body.assigned_analyst,
+                    alert_time=body.alert_time,
                     status=CaseStatus.NEW.value,
                     created_at=now,
                     updated_at=now,
@@ -202,6 +223,16 @@ class CaseService:
                 model=body.model,
                 status=to_status.value,
                 updated_at=now,
+                model_requested=body.model_requested,
+                route=body.route,
+                rule=body.rule,
+                verdict=body.verdict,
+                recommended_action=body.recommended_action,
+                confidence=body.confidence,
+                privileged_account=body.privileged_account,
+                crown_jewel_asset=body.crown_jewel_asset,
+                prompt_tokens=body.prompt_tokens,
+                completion_tokens=body.completion_tokens,
             )
             self._audit(
                 conn,
@@ -391,9 +422,19 @@ class CaseService:
             disposition = self._require_open_disposition(conn, case_id)
             decision = self._store.get_decision_for_disposition(conn, disposition.id)
             if decision is None:
+                if case.status == CaseStatus.APPROVED:
+                    raise NoAnalystApproval(
+                        "no analyst approval stored for this case",
+                        details={"case_id": case_id, "disposition_id": disposition.id},
+                    )
                 raise Conflict(
                     "no decision for open disposition",
                     details={"case_id": case_id, "disposition_id": disposition.id},
+                )
+            if decision.decision != "approve":
+                raise NoAnalystApproval(
+                    "disposition was not approved by an analyst",
+                    details={"case_id": case_id, "decision": decision.decision},
                 )
             soar_request = SoarSubmissionRequest(
                 case_id=case_id,
@@ -469,6 +510,46 @@ class CaseService:
             )
         return CaseList(items=items, total=total)
 
+    def auto_resolve_case(self, case_id: int, body: AutoResolveCreate) -> Case:
+        if body.actor.type != "system" or body.actor.id != AUTO_RESOLVE_ACTOR.id:
+            raise Forbidden(
+                "only the autonomous-triage policy may auto-resolve",
+                details={"actor_type": body.actor.type, "actor_id": body.actor.id},
+            )
+        if body.policy_id != AUTO_RESOLVE_POLICY_ID:
+            raise DomainValidationError(
+                "unsupported policy_id",
+                details={"policy_id": body.policy_id},
+            )
+        now = utc_now()
+        with self._store.transaction() as conn:
+            case = self._require_case(conn, case_id)
+            failed = self._policy_gate_failed(conn, case, body.triage_evidence_id)
+            if failed:
+                raise PolicyGateFailed(
+                    "autonomous policy gate failed",
+                    details={"failed": failed},
+                )
+            to_status = self._require_transition(AUTO_RESOLVE, case.status)
+            updated = self._store.update_case_status(conn, case_id, to_status.value, now)
+            self._audit(
+                conn,
+                case_id=case_id,
+                ts=now,
+                event_type=EVENT_AUTO_RESOLVED,
+                actor=body.actor,
+                from_status=case.status.value,
+                to_status=to_status.value,
+                payload={
+                    "verdict": case.verdict,
+                    "policy_id": body.policy_id,
+                    "triage_evidence_id": body.triage_evidence_id,
+                    "route": case.route,
+                    "gate_checks": list(_GATE_IDS),
+                },
+            )
+            return updated
+
     def flag_review(self, case_id: int, body: ReviewFlagCreate) -> Case:
         now = utc_now()
         with self._store.transaction() as conn:
@@ -524,6 +605,17 @@ class CaseService:
                 decision=decision,
                 soar=self._store.get_soar(conn, case_id),
                 audit=self._store.list_history(conn, case_id),
+                alert_time=case.alert_time,
+                model_requested=case.model_requested,
+                route=case.route,
+                rule=case.rule,
+                verdict=case.verdict,
+                recommended_action=case.recommended_action,
+                confidence=case.confidence,
+                privileged_account=case.privileged_account,
+                crown_jewel_asset=case.crown_jewel_asset,
+                prompt_tokens=case.prompt_tokens,
+                completion_tokens=case.completion_tokens,
             )
 
     def list_events(self, *, after_id: int, case_id: int | None, limit: int) -> EventPage:
@@ -539,6 +631,230 @@ class CaseService:
             )
         next_after_id = items[-1].id if items else after_id
         return EventPage(items=items, next_after_id=next_after_id)
+
+    def get_metrics(self, *, since: str | None) -> Metrics:
+        if since is not None:
+            self._parse_iso_timestamp(since)
+        now = utc_now()
+        agents_since = self._iso_shift(now, minutes=-15)
+        with self._store.transaction() as conn:
+            cases = self._store.list_cases_for_metrics(conn, since=since)
+            case_ids = [case.id for case in cases]
+            audit_events = self._store.list_audit_for_case_ids(conn, case_ids)
+            recent_cases = self._store.list_recent_cases(conn, 20)
+            agent_events = self._store.list_audit_since(conn, agents_since)
+        return self._build_metrics(
+            cases=cases,
+            audit_events=audit_events,
+            recent_cases=recent_cases,
+            agent_events=agent_events,
+        )
+
+    def _parse_iso_timestamp(self, value: str) -> datetime:
+        raw = value
+        if raw.endswith("Z"):
+            raw = f"{raw[:-1]}+00:00"
+        try:
+            parsed = datetime.fromisoformat(raw)
+        except ValueError as exc:
+            raise DomainValidationError(
+                "invalid timestamp",
+                details={"since": value},
+            ) from exc
+        return parsed
+
+    def _iso_shift(self, ts: str, *, minutes: int) -> str:
+        dt = self._parse_iso_timestamp(ts)
+        shifted = dt + timedelta(minutes=minutes)
+        return shifted.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    @staticmethod
+    def _event_start(case: Case) -> str:
+        return case.alert_time if case.alert_time is not None else case.created_at
+
+    @staticmethod
+    def _seconds_delta(start: str, end: str) -> float:
+        start_raw = start[:-1] + "+00:00" if start.endswith("Z") else start
+        end_raw = end[:-1] + "+00:00" if end.endswith("Z") else end
+        begin = datetime.fromisoformat(start_raw)
+        finish = datetime.fromisoformat(end_raw)
+        return (finish - begin).total_seconds()
+
+    @staticmethod
+    def _timing_stats(values: list[float]) -> TimingStats:
+        if not values:
+            return TimingStats(n=0, median=None, average=None)
+        median = float(statistics.median(values))
+        average = sum(values) / len(values)
+        return TimingStats(
+            n=len(values),
+            median=round(median, 1),
+            average=round(average, 1),
+        )
+
+    def _build_metrics(
+        self,
+        *,
+        cases: list[Case],
+        audit_events: list[AuditEvent],
+        recent_cases: list[Case],
+        agent_events: list[AuditEvent],
+    ) -> Metrics:
+        by_status = {status.value: 0 for status in CaseStatus}
+        by_route = {"autonomous": 0, "collaborative": 0, "review": 0}
+        auto_resolved = 0
+        collaborative_open = 0
+        needs_review = 0
+        uplifts: dict[str, int] = {}
+        downgrades = 0
+
+        for case in cases:
+            by_status[case.status.value] += 1
+            if case.route is not None:
+                by_route[case.route] += 1
+            if case.status == CaseStatus.AUTO_RESOLVED:
+                auto_resolved += 1
+            if case.status == CaseStatus.TRIAGED and case.route == "collaborative":
+                collaborative_open += 1
+            if case.status == CaseStatus.NEEDS_REVIEW:
+                needs_review += 1
+            if case.triage_severity is not None:
+                splunk_rank = _SEVERITY_RANK[case.splunk_severity]
+                triage_rank = _SEVERITY_RANK[case.triage_severity]
+                if triage_rank > splunk_rank:
+                    key = f"{case.splunk_severity}->{case.triage_severity}"
+                    uplifts[key] = uplifts.get(key, 0) + 1
+                elif triage_rank < splunk_rank:
+                    downgrades += 1
+
+        events_by_case: dict[int, list[AuditEvent]] = {}
+        for event in audit_events:
+            if event.case_id is None:
+                continue
+            events_by_case.setdefault(event.case_id, []).append(event)
+
+        triage_deltas: list[float] = []
+        ai_only_deltas: list[float] = []
+        ai_plus_human_deltas: list[float] = []
+
+        for case in cases:
+            start = self._event_start(case)
+            case_events = events_by_case.get(case.id, [])
+            triage_ts = next(
+                (event.ts for event in case_events if event.type == EVENT_TRIAGED),
+                None,
+            )
+            if triage_ts is not None:
+                triage_deltas.append(self._seconds_delta(start, triage_ts))
+            auto_ts = next(
+                (event.ts for event in case_events if event.type == EVENT_AUTO_RESOLVED),
+                None,
+            )
+            if auto_ts is not None:
+                ai_only_deltas.append(self._seconds_delta(start, auto_ts))
+            approve_ts = next(
+                (event.ts for event in case_events if event.type == EVENT_APPROVED),
+                None,
+            )
+            if approve_ts is not None:
+                ai_plus_human_deltas.append(self._seconds_delta(start, approve_ts))
+
+        prompt_total = 0
+        completion_total = 0
+        token_cases = 0
+        for case in cases:
+            prompt = case.prompt_tokens or 0
+            completion = case.completion_tokens or 0
+            if case.prompt_tokens is not None or case.completion_tokens is not None:
+                token_cases += 1
+            prompt_total += prompt
+            completion_total += completion
+        token_total = prompt_total + completion_total
+        per_case_average = (
+            None if token_cases == 0 else round(token_total / token_cases, 1)
+        )
+
+        cost_usd = self._metrics_cost_usd(prompt_total, completion_total)
+        minutes_per_alert = int(os.environ.get("MINUTES_PER_ALERT", "15"))
+        auto_enabled = os.environ.get("AUTO_RESOLVE_ENABLED", "0").strip() == "1"
+
+        agent_map: dict[tuple[str, str], MetricsAgent] = {}
+        for event in agent_events:
+            agent_key = (event.actor.id, event.actor.type)
+            existing = agent_map.get(agent_key)
+            if existing is None:
+                agent_map[agent_key] = MetricsAgent(
+                    actor_id=event.actor.id,
+                    type=event.actor.type,
+                    events=1,
+                    last_seen=event.ts,
+                )
+            else:
+                last_seen = existing.last_seen
+                if event.ts > last_seen:
+                    last_seen = event.ts
+                agent_map[agent_key] = MetricsAgent(
+                    actor_id=existing.actor_id,
+                    type=existing.type,
+                    events=existing.events + 1,
+                    last_seen=last_seen,
+                )
+        agents = sorted(agent_map.values(), key=lambda item: item.last_seen, reverse=True)
+
+        recent = [
+            MetricsRecentCase(
+                id=case.id,
+                alert_id=case.alert_id,
+                title=case.title,
+                status=case.status,
+                route=case.route,
+                splunk_severity=case.splunk_severity,
+                triage_severity=case.triage_severity,
+                verdict=case.verdict,
+                updated_at=case.updated_at,
+            )
+            for case in recent_cases
+        ]
+
+        return Metrics(
+            counts=MetricsCounts(
+                total=len(cases),
+                by_status=by_status,
+                by_route=by_route,
+                auto_resolved=auto_resolved,
+                collaborative_open=collaborative_open,
+                needs_review=needs_review,
+            ),
+            uplifts=uplifts,
+            downgrades=downgrades,
+            time_to_triage_s=self._timing_stats(triage_deltas),
+            time_to_resolve_s=ResolveTimingStats(
+                ai_only=self._timing_stats(ai_only_deltas),
+                ai_plus_human=self._timing_stats(ai_plus_human_deltas),
+            ),
+            tokens=MetricsTokens(
+                prompt=prompt_total,
+                completion=completion_total,
+                total=token_total,
+                per_case_average=per_case_average,
+            ),
+            cost_usd=cost_usd,
+            auto_resolve_enabled=auto_enabled,
+            minutes_saved_estimate=auto_resolved * minutes_per_alert,
+            assumptions=MetricsAssumptions(minutes_per_alert=minutes_per_alert),
+            agents=agents,
+            recent=recent,
+        )
+
+    def _metrics_cost_usd(self, prompt: int, completion: int) -> float | None:
+        in_raw = os.environ.get("GROK_PRICE_INPUT_PER_MTOK", "").strip()
+        out_raw = os.environ.get("GROK_PRICE_OUTPUT_PER_MTOK", "").strip()
+        if not in_raw or not out_raw:
+            return None
+        in_price = float(in_raw)
+        out_price = float(out_raw)
+        total = prompt * in_price / 1_000_000 + completion * out_price / 1_000_000
+        return round(total, 4)
 
     def _require_case(self, conn: sqlite3.Connection, case_id: int) -> Case:
         case = self._store.get_case(conn, case_id)
@@ -600,3 +916,39 @@ class CaseService:
     def _check_limit(self, limit: int, *, max_limit: int) -> None:
         if limit < 1 or limit > max_limit:
             raise DomainValidationError("invalid pagination", details={"limit": limit})
+
+    def _policy_gate_failed(
+        self,
+        conn: sqlite3.Connection,
+        case: Case,
+        triage_evidence_id: int,
+    ) -> list[str]:
+        failed: list[str] = []
+        enabled = os.environ.get("AUTO_RESOLVE_ENABLED", "0").strip() == "1"
+        if not enabled:
+            failed.append("G1")
+        if case.route != "autonomous":
+            failed.append("G2")
+        if case.verdict not in ("benign", "false_positive"):
+            failed.append("G3")
+        if case.recommended_action in ("escalate", "contain"):
+            failed.append("G4")
+        if case.triage_severity not in ("low", "medium"):
+            failed.append("G5")
+        if _SEVERITY_RANK[case.splunk_severity] > _SEVERITY_RANK["medium"]:
+            failed.append("G6")
+        if case.privileged_account is True:
+            failed.append("G7")
+        if case.crown_jewel_asset is True:
+            failed.append("G8")
+        min_conf = float(os.environ.get("AUTO_RESOLVE_MIN_CONFIDENCE", "0.8"))
+        if case.confidence is None or case.confidence < min_conf:
+            failed.append("G9")
+        evidence = self._store.get_evidence_by_id(conn, triage_evidence_id)
+        if (
+            evidence is None
+            or evidence.case_id != case.id
+            or evidence.source != "triage_assessment"
+        ):
+            failed.append("G10")
+        return failed

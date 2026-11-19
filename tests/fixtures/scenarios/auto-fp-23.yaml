@@ -1,0 +1,35 @@
+id: auto-fp-23
+title: auto fp 23
+splunk_rule_name: auto fp 23
+splunk_severity: medium
+outcome_class: auto_fp
+weight: 1
+mitre_techniques:
+- T1078
+entities:
+  user:
+    pick:
+      kind: user
+      where:
+        pool: routine
+  host:
+    pick:
+      kind: host
+      where:
+        pool: routine
+alert:
+  title: auto fp 23
+  description: Activity for ${user.id} on ${host.id}
+  fields: {}
+evidence:
+- source: auth
+  sourcetype: WinEventLog:Security
+  offset_s: -30
+  fields:
+    user: ${user.id}
+    host: ${host.id}
+- source: proxy
+  sourcetype: bluecoat:proxy
+  offset_s: 10
+  fields:
+    src_host: ${host.id}

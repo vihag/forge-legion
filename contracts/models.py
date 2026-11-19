@@ -10,6 +10,9 @@ ActorType = Literal["analyst", "agent", "system"]
 FindingKind = Literal["observation", "hypothesis"]
 DispositionAction = Literal["false_positive", "benign", "escalate", "contain"]
 DecisionValue = Literal["approve", "reject"]
+Verdict = Literal["benign", "false_positive", "suspicious", "malicious"]
+RecommendedAction = Literal["none", "escalate", "contain"]
+Route = Literal["collaborative", "autonomous", "review"]
 
 
 class CaseStatus(StrEnum):
@@ -21,6 +24,7 @@ class CaseStatus(StrEnum):
     REJECTED = "REJECTED"
     SUBMITTED = "SUBMITTED"
     NEEDS_REVIEW = "NEEDS_REVIEW"
+    AUTO_RESOLVED = "AUTO_RESOLVED"
 
 
 class APIModel(BaseModel):
@@ -38,6 +42,7 @@ class CaseCreate(APIModel):
     splunk_severity: Severity
     summary: str | None = Field(default=None, min_length=1)
     assigned_analyst: str | None = Field(default=None, min_length=1)
+    alert_time: str | None = Field(default=None, min_length=1)
     actor: Actor
 
 
@@ -45,6 +50,22 @@ class TriageCreate(APIModel):
     severity: Severity
     rationale: str = Field(min_length=1)
     model: str = Field(min_length=1)
+    actor: Actor
+    model_requested: str | None = Field(default=None, min_length=1)
+    route: Route | None = None
+    rule: str | None = Field(default=None, min_length=1)
+    verdict: Verdict | None = None
+    recommended_action: RecommendedAction | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    privileged_account: bool | None = None
+    crown_jewel_asset: bool | None = None
+    prompt_tokens: int | None = Field(default=None, ge=0)
+    completion_tokens: int | None = Field(default=None, ge=0)
+
+
+class AutoResolveCreate(APIModel):
+    policy_id: Literal["autonomous-triage"]
+    triage_evidence_id: int = Field(ge=1)
     actor: Actor
 
 
@@ -117,6 +138,17 @@ class Case(APIModel):
     status: CaseStatus
     created_at: str
     updated_at: str
+    alert_time: str | None = None
+    model_requested: str | None = None
+    route: Route | None = None
+    rule: str | None = None
+    verdict: Verdict | None = None
+    recommended_action: RecommendedAction | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    privileged_account: bool | None = None
+    crown_jewel_asset: bool | None = None
+    prompt_tokens: int | None = Field(default=None, ge=0)
+    completion_tokens: int | None = Field(default=None, ge=0)
 
 
 class CaseSummary(APIModel):
@@ -217,6 +249,17 @@ class CaseView(APIModel):
     decision: Decision | None
     soar: SoarSubmission | None
     audit: list[AuditEvent]
+    alert_time: str | None = None
+    model_requested: str | None = None
+    route: Route | None = None
+    rule: str | None = None
+    verdict: Verdict | None = None
+    recommended_action: RecommendedAction | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    privileged_account: bool | None = None
+    crown_jewel_asset: bool | None = None
+    prompt_tokens: int | None = Field(default=None, ge=0)
+    completion_tokens: int | None = Field(default=None, ge=0)
 
 
 class EventPage(APIModel):
@@ -232,3 +275,68 @@ class ErrorResponse(APIModel):
 
 class HealthResponse(APIModel):
     status: Literal["ok"]
+
+
+class TimingStats(APIModel):
+    n: int = Field(ge=0)
+    median: float | None = None
+    average: float | None = None
+
+
+class MetricsCounts(APIModel):
+    total: int = Field(ge=0)
+    by_status: dict[str, int]
+    by_route: dict[str, int]
+    auto_resolved: int = Field(ge=0)
+    collaborative_open: int = Field(ge=0)
+    needs_review: int = Field(ge=0)
+
+
+class ResolveTimingStats(APIModel):
+    ai_only: TimingStats
+    ai_plus_human: TimingStats
+
+
+class MetricsTokens(APIModel):
+    prompt: int = Field(ge=0)
+    completion: int = Field(ge=0)
+    total: int = Field(ge=0)
+    per_case_average: float | None = None
+
+
+class MetricsAssumptions(APIModel):
+    minutes_per_alert: int = Field(ge=0)
+
+
+class MetricsAgent(APIModel):
+    actor_id: str
+    type: ActorType
+    events: int = Field(ge=0)
+    last_seen: str
+
+
+class MetricsRecentCase(APIModel):
+    id: int
+    alert_id: str
+    title: str
+    status: CaseStatus
+    route: Route | None = None
+    splunk_severity: Severity
+    triage_severity: Severity | None = None
+    verdict: Verdict | None = None
+    updated_at: str
+
+
+class Metrics(APIModel):
+    counts: MetricsCounts
+    uplifts: dict[str, int]
+    downgrades: int = Field(ge=0)
+    time_to_triage_s: TimingStats
+    time_to_resolve_s: ResolveTimingStats
+    tokens: MetricsTokens
+    cost_usd: float | None = None
+    auto_resolve_enabled: bool
+    minutes_saved_estimate: int = Field(ge=0)
+    assumptions: MetricsAssumptions
+    agents: list[MetricsAgent]
+    recent: list[MetricsRecentCase]

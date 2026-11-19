@@ -4,17 +4,33 @@ from __future__ import annotations
 
 import socket
 from collections.abc import Generator
+from pathlib import Path
 
 import httpx
 import pytest
 
 from services.triage.grok import HttpGrokClient
 
+ROOT = Path(__file__).resolve().parents[1]
+
 _ORIGINAL_HTTP_GROK_INIT = HttpGrokClient.__init__
 
 
 def _is_mock_transport(transport: object | None) -> bool:
     return isinstance(transport, httpx.MockTransport)
+
+
+@pytest.fixture(autouse=True)
+def unset_env_example_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    example = ROOT / ".env.example"
+    if not example.is_file():
+        return
+    for line in example.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in line:
+            continue
+        key = line.split("=", 1)[0].strip()
+        monkeypatch.delenv(key, raising=False)
 
 
 @pytest.fixture(autouse=True)

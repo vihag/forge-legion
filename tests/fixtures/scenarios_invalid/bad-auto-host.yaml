@@ -1,0 +1,13 @@
+id: bad-auto-host
+title: bad
+splunk_rule_name: bad
+splunk_severity: low
+outcome_class: auto_benign
+weight: 1
+entities:
+  user:
+    ref: user:adm.mtan
+alert:
+  title: t
+  description: d
+  fields: {}
