@@ -89,7 +89,7 @@ The agent `/mcp` server is untouched apart from §3: still no approve/reject too
 |---|---|
 | `get_alert(alert_id)` | `GET /v1/alerts/{alert_id}` |
 | `list_alert_evidence(alert_id, source=None)` | `GET /v1/alerts/{alert_id}/evidence` |
-| `search_evidence(source, start, end, entity=None)` | `GET /v1/evidence` |
+| `search_evidence(source, start=None, end=None, entity=None)` | `GET /v1/evidence` (omitted bounds default to the last 72 h up to now + 1 min) |
 - No `actor_id` argument (reads need no actor); actor rules for write tools unchanged.
 - `SplunkClient` exposes GET methods only; AST test: adapter never imports `services.mock_splunk` and `splunk_client.py` contains no `.post(`/`.put(`/`.delete(`.
 - Errors: Splunk 404 → tool error `not_found`; unreachable → `splunk_unreachable`.

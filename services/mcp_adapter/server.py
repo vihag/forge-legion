@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -20,6 +21,33 @@ from services.mcp_adapter.config import AdapterConfig
 from services.mcp_adapter.splunk_client import SplunkClient, SplunkHttpError, SplunkUnreachable
 
 _ACTOR_RE = re.compile(MCP_ACTOR_ID_PATTERN)
+
+# Default search window when a caller omits start/end: the last 72 hours, ending a
+# minute ahead of now so records stamped "now" are inside the end-exclusive window.
+SEARCH_DEFAULT_LOOKBACK = timedelta(hours=72)
+SEARCH_DEFAULT_END_SLACK = timedelta(minutes=1)
+
+
+def _iso_utc(value: datetime) -> str:
+    return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def default_search_window(
+    start: str | None, end: str | None, *, now: datetime | None = None
+) -> tuple[str, str]:
+    """Fill a missing ``end`` with now (+1 min) and a missing ``start`` with end - 72h."""
+    if end is None:
+        end_at = (now or datetime.now(UTC)) + SEARCH_DEFAULT_END_SLACK
+        end = _iso_utc(end_at)
+    if start is None:
+        try:
+            end_at = datetime.fromisoformat(end.replace("Z", "+00:00"))
+        except ValueError:
+            end_at = now or datetime.now(UTC)
+        if end_at.tzinfo is None:
+            end_at = end_at.replace(tzinfo=UTC)
+        start = _iso_utc(end_at - SEARCH_DEFAULT_LOOKBACK)
+    return start, end
 
 
 def _tool_error(payload: dict[str, Any]) -> CallToolResult:
@@ -259,7 +287,7 @@ def build_mcp_server(
 
     @mcp.tool()
     def get_alert(alert_id: str) -> CallToolResult:
-        """Fetch a Mock Splunk alert by id."""
+        """Fetch a Splunk alert by id."""
         try:
             return _tool_ok(splunk.get_alert(alert_id))
         except SplunkHttpError as exc:
@@ -269,7 +297,7 @@ def build_mcp_server(
 
     @mcp.tool()
     def list_alert_evidence(alert_id: str, source: str | None = None) -> CallToolResult:
-        """List evidence linked to an alert."""
+        """List every Splunk evidence record linked to an alert (no time window)."""
         try:
             return _tool_ok(splunk.list_alert_evidence(alert_id, source=source))
         except SplunkHttpError as exc:
@@ -280,11 +308,12 @@ def build_mcp_server(
     @mcp.tool()
     def search_evidence(
         source: str,
-        start: str,
-        end: str,
+        start: str | None = None,
+        end: str | None = None,
         entity: str | None = None,
     ) -> CallToolResult:
-        """Search Mock Splunk evidence in a time window."""
+        """Search Splunk evidence by time window (start <= timestamp < end, ISO-8601 UTC); omit start/end for the last 72 h up to now; source "*" = all sources; entity = user, IP, country or host."""  # noqa: E501
+        start, end = default_search_window(start, end)
         try:
             return _tool_ok(
                 splunk.search_evidence(source=source, start=start, end=end, entity=entity)

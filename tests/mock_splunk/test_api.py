@@ -170,9 +170,9 @@ def test_window_includes_baseline_login(client: TestClient) -> None:
     assert _ids(by_ip.json()) == ["EV-AUTH-0002", "EV-AUTH-0003"]
 
 
-# Clock at the hero story's last record: the reset restamp is then a no-op, so the
-# fixture's literal evidence timestamps hold.
-HERO_LAST_RECORD_TIME = datetime(2026, 11, 18, 2, 20, 11, tzinfo=UTC)
+# Clock one EVIDENCE_LEAD after the hero story's last record: the reset restamp is
+# then a no-op, so the fixture's literal evidence timestamps hold.
+HERO_LAST_RECORD_TIME = datetime(2026, 11, 18, 2, 20, 12, tzinfo=UTC)
 
 
 def test_window_is_start_inclusive_end_exclusive() -> None:

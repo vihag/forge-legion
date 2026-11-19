@@ -207,14 +207,21 @@ def _load_fixtures(fixtures_dir: Path) -> _LoadedSeed:
 _SEED_HERO_ALERT_ID = "SPL-2026-0001"
 
 
+# Evidence lands this far before its alert so a search whose ``end`` is the alert
+# time (the window is end-exclusive) still returns the latest record.
+EVIDENCE_LEAD = timedelta(seconds=1)
+
+
 def _restamp_seed_hero(loaded: _LoadedSeed, now: datetime) -> _LoadedSeed:
     hero = next((alert for alert in loaded.alerts if alert.alert_id == _SEED_HERO_ALERT_ID), None)
     if hero is None:
         return loaded
     # Anchor on the latest hero record so no evidence is later than the restamped
-    # alert (``now``); gaps between evidence records are preserved.
+    # alert (``now``); gaps between evidence records are preserved. The whole seed
+    # moves together, so unlinked rows (the SG baseline login) keep their distance
+    # from the hero story instead of drifting days back to the fixture date.
     hero_times = [row.timestamp for row in loaded.evidence if _SEED_HERO_ALERT_ID in row.alert_ids]
-    shift = now - max([hero.triggered_at, *hero_times])
+    shift = now - EVIDENCE_LEAD - max([hero.triggered_at, *hero_times])
     alerts = [
         alert.model_copy(update={"triggered_at": now, "emitted_at": now})
         if alert.alert_id == _SEED_HERO_ALERT_ID
@@ -222,10 +229,7 @@ def _restamp_seed_hero(loaded: _LoadedSeed, now: datetime) -> _LoadedSeed:
         for alert in loaded.alerts
     ]
     evidence = [
-        row.model_copy(update={"timestamp": row.timestamp + shift})
-        if _SEED_HERO_ALERT_ID in row.alert_ids
-        else row
-        for row in loaded.evidence
+        row.model_copy(update={"timestamp": row.timestamp + shift}) for row in loaded.evidence
     ]
     return _LoadedSeed(loaded.seed_version, alerts, evidence)
 

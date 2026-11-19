@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -18,8 +19,10 @@ from tests.mcp_adapter.asgi_transport import FastApiTestTransport
 from tests.mcp_adapter.test_analyst import _session_runner
 
 ALERT_ID = "SPL-2026-0001"
-WINDOW_START = "2026-11-17T00:00:00Z"
-WINDOW_END = "2026-11-19T00:00:00Z"
+# The seed is restamped to "now" on reset, so windows are relative to the real clock.
+_NOW = datetime.now(UTC)
+WINDOW_START = (_NOW - timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ")
+WINDOW_END = (_NOW + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @pytest.fixture
