@@ -94,7 +94,8 @@ def _recompute(base: str) -> dict[str, Any]:
         if status == "AUTO_RESOLVED":
             auto_resolved += 1
         splunk = view.get("splunk_severity")
-        triage = view.get("triage_severity")
+        # CaseView exposes the effective severity (triage if set, else Splunk).
+        triage = view.get("triage_severity") or view.get("severity")
         if isinstance(splunk, str) and isinstance(triage, str):
             splunk_rank = _SEVERITY_RANK[splunk]
             triage_rank = _SEVERITY_RANK[triage]
