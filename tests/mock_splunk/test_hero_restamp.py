@@ -20,10 +20,12 @@ def test_hero_alert_restamp_on_reset() -> None:
 
     loaded = _load_fixtures(default_fixtures_dir())
     hero_orig = next(a for a in loaded.alerts if a.alert_id == "SPL-2026-0001")
+    hero_rows = [row for row in loaded.evidence if "SPL-2026-0001" in row.alert_ids]
+    latest = max([hero_orig.triggered_at, *(row.timestamp for row in hero_rows)])
+    # Fixture story has records after the alert; after reset they must not be in the future.
+    assert latest > hero_orig.triggered_at
     offsets = {
-        row.evidence_id: (row.timestamp - hero_orig.triggered_at).total_seconds()
-        for row in loaded.evidence
-        if "SPL-2026-0001" in row.alert_ids
+        row.evidence_id: (row.timestamp - latest).total_seconds() for row in hero_rows
     }
     app = create_app(clock=_Clock())
     with Client(transport=InProcessTransport(app), base_url="http://test") as client:
@@ -35,6 +37,10 @@ def test_hero_alert_restamp_on_reset() -> None:
         for row in evidence:
             ts = datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00"))
             assert (ts - triggered).total_seconds() == offsets[row["evidence_id"]]
+            assert ts <= now
+        assert max(
+            datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00")) for row in evidence
+        ) == now
 
 
 def test_hero_time_to_triage_small_after_reset(tmp_path) -> None:
@@ -69,3 +75,32 @@ def test_hero_time_to_triage_small_after_reset(tmp_path) -> None:
     assert timing["n"] >= 1
     assert timing["median"] is not None
     assert timing["median"] < 600
+
+def test_streamed_evidence_never_after_alert(monkeypatch) -> None:
+    """Every scenario's evidence is at or before its alert; gaps between records kept."""
+    from services.mock_splunk import stream
+
+    root = Path(__file__).resolve().parents[2]
+    monkeypatch.setenv("SCENARIO_WORLD", str(root / "config/world.yaml"))
+    monkeypatch.setenv("SCENARIO_DIR", str(root / "config/scenarios"))
+    stream.reset_registry()
+    now = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
+    try:
+        scenarios = stream.list_scenarios()
+        assert any(max(r.offset_s for r in s.evidence) > 0 for s in scenarios if s.evidence)
+        for index, scenario in enumerate(scenarios):
+            item = stream._emit_one(
+                scenario=scenario,
+                stream_index=index,
+                clock=lambda: now,
+                rng=__import__("random").Random(index),
+            )
+            assert item.alert.triggered_at == now
+            stamps = [row.timestamp for row in item.evidence]
+            assert all(ts <= now for ts in stamps), scenario.id
+            records = scenario.evidence
+            gaps = [b.offset_s - a.offset_s for a, b in zip(records, records[1:], strict=False)]
+            got = [(b - a).total_seconds() for a, b in zip(stamps, stamps[1:], strict=False)]
+            assert got == gaps, scenario.id
+    finally:
+        stream.reset_registry()
