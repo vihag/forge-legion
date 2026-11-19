@@ -31,7 +31,14 @@ ServiceDep = Annotated[MockSoarService, Depends(get_service)]
 
 
 def _errors(*codes: int) -> dict[int | str, dict[str, Any]]:
-    return {code: {"model": ErrorResponse} for code in codes}
+    descriptions = {
+        404: "Submission not found",
+        409: "Conflicting resubmission",
+        422: "Validation error",
+    }
+    return {
+        code: {"model": ErrorResponse, "description": descriptions[code]} for code in codes
+    }
 
 
 def _mock_soar_error_handler(_request: Request, exc: Exception) -> JSONResponse:

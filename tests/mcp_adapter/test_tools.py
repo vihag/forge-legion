@@ -409,4 +409,8 @@ def test_adapter_has_no_case_api_imports() -> None:
             if isinstance(node, ast.ImportFrom) and node.module:
                 if node.module.startswith("services.case_api"):
                     violations.append(f"{path.name}: from {node.module}")
+                if node.module == "services":
+                    for alias in node.names:
+                        if alias.name == "case_api":
+                            violations.append(f"{path.name}: from services import case_api")
     assert violations == []

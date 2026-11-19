@@ -61,7 +61,7 @@ def _mock_soar_openapi() -> str:
 
 async def _mcp_tools_payload() -> list[dict[str, Any]]:
     config = AdapterConfig(
-        case_api_url="http://127.0.0.1:8001",
+        case_api_url="http://127.0.0.1:8000",
         adapter_token=None,
         actor_allowlist=None,
     )

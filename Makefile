@@ -27,5 +27,5 @@ run-mcp:
 	$(PYTHON) -m uvicorn services.mcp_adapter.app:app --host 127.0.0.1 --port 8003
 
 e2e-soar:
-	CASE_API_URL=http://127.0.0.1:8001 SOAR_CLIENT=http MOCK_SOAR_URL=http://127.0.0.1:8002 \
+	CASE_API_URL=http://127.0.0.1:8000 SOAR_CLIENT=http MOCK_SOAR_URL=http://127.0.0.1:8002 \
 		$(PYTHON) -m pytest tests/test_soar_integration.py -q
