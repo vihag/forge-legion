@@ -18,6 +18,7 @@ from tests.mcp_adapter.asgi_transport import FastApiTestTransport
 
 CONTRACT_TOOLS = (
     "add_evidence",
+    "create_incident_ticket",
     "get_alert",
     "get_case",
     "get_case_history",

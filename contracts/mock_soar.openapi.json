@@ -166,6 +166,104 @@
         }
       }
     },
+    "/v1/tickets": {
+      "post": {
+        "tags": [
+          "soar"
+        ],
+        "summary": "Create Ticket",
+        "operationId": "create_ticket",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SoarTicketRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarTicketReceipt"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarTicketReceipt"
+                }
+              }
+            },
+            "description": "Created"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "soar"
+        ],
+        "summary": "List Tickets",
+        "operationId": "list_tickets",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarTicketList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/reset": {
       "post": {
         "tags": [
@@ -448,6 +546,12 @@
             "type": "integer",
             "minimum": 0.0,
             "title": "Submissions"
+          },
+          "tickets": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Tickets",
+            "default": 0
           }
         },
         "additionalProperties": false,
@@ -500,6 +604,160 @@
           "submitted_by"
         ],
         "title": "SoarSubmissionRequest"
+      },
+      "SoarTicketList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SoarTicketRecord"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SoarTicketList"
+      },
+      "SoarTicketReceipt": {
+        "properties": {
+          "ticket_id": {
+            "type": "string",
+            "title": "Ticket Id"
+          },
+          "case_id": {
+            "type": "integer",
+            "title": "Case Id"
+          },
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          },
+          "recorded_at": {
+            "type": "string",
+            "title": "Recorded At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ticket_id",
+          "case_id",
+          "created",
+          "recorded_at"
+        ],
+        "title": "SoarTicketReceipt"
+      },
+      "SoarTicketRecord": {
+        "properties": {
+          "ticket_id": {
+            "type": "string",
+            "title": "Ticket Id"
+          },
+          "case_id": {
+            "type": "integer",
+            "title": "Case Id"
+          },
+          "alert_id": {
+            "type": "string",
+            "title": "Alert Id"
+          },
+          "disposition_id": {
+            "type": "integer",
+            "title": "Disposition Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "approval": {
+            "$ref": "#/components/schemas/SoarApproval"
+          },
+          "requested_by": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "recorded_at": {
+            "type": "string",
+            "title": "Recorded At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ticket_id",
+          "case_id",
+          "alert_id",
+          "disposition_id",
+          "title",
+          "severity",
+          "summary",
+          "approval",
+          "requested_by",
+          "recorded_at"
+        ],
+        "title": "SoarTicketRecord"
+      },
+      "SoarTicketRequest": {
+        "properties": {
+          "case_id": {
+            "type": "integer",
+            "title": "Case Id"
+          },
+          "alert_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Alert Id"
+          },
+          "disposition_id": {
+            "type": "integer",
+            "title": "Disposition Id"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Title"
+          },
+          "severity": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Severity"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Summary"
+          },
+          "approval": {
+            "$ref": "#/components/schemas/SoarApproval"
+          },
+          "requested_by": {
+            "$ref": "#/components/schemas/Actor"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_id",
+          "alert_id",
+          "disposition_id",
+          "title",
+          "severity",
+          "summary",
+          "approval",
+          "requested_by"
+        ],
+        "title": "SoarTicketRequest"
       },
       "ValidationError": {
         "properties": {

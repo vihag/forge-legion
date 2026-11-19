@@ -148,6 +148,76 @@ def _weighted_pick(rng: random.Random, scenarios: tuple[Scenario, ...]) -> Scena
     return rng.choices(pool, weights=weights, k=1)[0]
 
 
+def _routine_scenarios(scenarios: tuple[Scenario, ...]) -> list[Scenario]:
+    return [
+        scenario
+        for scenario in scenarios
+        if scenario.weight > 0 and scenario.outcome_class.startswith("auto_")
+    ]
+
+
+def _hitl_scenarios(scenarios: tuple[Scenario, ...]) -> list[Scenario]:
+    return [
+        scenario
+        for scenario in scenarios
+        if scenario.weight > 0 and not scenario.outcome_class.startswith("auto_")
+    ]
+
+
+def hitl_total(scenarios: tuple[Scenario, ...]) -> int:
+    return len(_hitl_scenarios(scenarios))
+
+
+def plan_script(scenarios: tuple[Scenario, ...], seed: int) -> list[tuple[int, str, int]]:
+    del seed
+    entries: list[tuple[int, str, int]] = []
+    for scenario in scenarios:
+        offsets = scenario.script_offsets
+        if not offsets:
+            continue
+        for occurrence, offset_s in enumerate(offsets):
+            entries.append((offset_s, scenario.id, occurrence))
+    entries.sort(key=lambda item: (item[0], item[1], item[2]))
+    return entries
+
+
+def _pick_hitl(
+    rng: random.Random,
+    scenarios: tuple[Scenario, ...],
+    hitl_used: frozenset[str],
+) -> tuple[Scenario, frozenset[str]]:
+    hitl = _hitl_scenarios(scenarios)
+    if not hitl:
+        raise RuntimeError("no hitl scenarios")
+    available = [scenario for scenario in hitl if scenario.id not in hitl_used]
+    next_used = set(hitl_used)
+    if not available:
+        available = hitl
+        next_used = set()
+    chosen = _weighted_pick(rng, tuple(available))
+    next_used.add(chosen.id)
+    if len(next_used) >= len(hitl):
+        next_used = set()
+    return chosen, frozenset(next_used)
+
+
+def _pick_scenario(
+    rng: random.Random,
+    scenarios: tuple[Scenario, ...],
+    hitl_used: frozenset[str],
+) -> tuple[Scenario, frozenset[str]]:
+    routine = _routine_scenarios(scenarios)
+    hitl = _hitl_scenarios(scenarios)
+    routine_weight = sum(scenario.weight for scenario in routine)
+    hitl_weight = sum(scenario.weight for scenario in hitl)
+    total = routine_weight + hitl_weight
+    if total <= 0:
+        raise RuntimeError("no weighted scenarios")
+    if rng.random() * total < routine_weight:
+        return _weighted_pick(rng, tuple(routine)), hitl_used
+    return _pick_hitl(rng, scenarios, hitl_used)
+
+
 def _entities_to_splunk(entities: dict[str, dict[str, Any]]) -> Entities:
     user: str | None = None
     hosts: list[str] = []
@@ -236,23 +306,34 @@ def generate(
     *,
     clock: Clock | None = None,
     scenario_dir: Path | None = None,
-) -> list[GeneratedStreamItem]:
+    hitl_used: frozenset[str] | None = None,
+) -> tuple[list[GeneratedStreamItem], frozenset[str]]:
     del scenario_dir
     scenarios = _loaded().scenarios
+    used = frozenset() if hitl_used is None else hitl_used
     results: list[GeneratedStreamItem] = []
     for offset in range(n):
         stream_index = start_index + offset
         pick_rng = random.Random(f"{seed}:pick:{stream_index}")
         entity_rng = random.Random(f"{seed}:entity:{stream_index}")
-        scenario = _weighted_pick(pick_rng, scenarios)
+        scenario, used = _pick_scenario(pick_rng, scenarios, used)
         results.append(
             _emit_one(scenario=scenario, stream_index=stream_index, clock=clock, rng=entity_rng)
         )
-    return results
+    return results, used
 
 
 def script_schedule(scenarios: tuple[Scenario, ...]) -> list[Scenario]:
-    return sorted(
-        [scenario for scenario in scenarios if scenario.demo_slot is not None],
-        key=lambda item: (item.demo_slot or 0, item.id),
-    )
+    plan = plan_script(scenarios, seed=0)
+    by_id = {scenario.id: scenario for scenario in scenarios}
+    ordered: list[Scenario] = []
+    seen: set[str] = set()
+    for _offset, scenario_id, _occ in plan:
+        if scenario_id in seen:
+            continue
+        scenario = by_id.get(scenario_id)
+        if scenario is None:
+            continue
+        ordered.append(scenario)
+        seen.add(scenario_id)
+    return ordered

@@ -23,7 +23,7 @@ class StreamEngine:
     def _interval_s(self) -> float:
         status = self._store.stream_status()
         if status.get("mode") == "script":
-            return 60.0
+            return 1.0
         rate = int(status.get("rate_per_min", os.environ.get("STREAM_RATE_PER_MIN", "3")))
         if rate <= 0:
             return 60.0

@@ -12,6 +12,9 @@ from contracts.mock_soar import (
     SoarRecordList,
     SoarResetResponse,
     SoarSubmissionRequest,
+    SoarTicketList,
+    SoarTicketReceipt,
+    SoarTicketRequest,
 )
 from contracts.models import ErrorResponse, HealthResponse
 from services.mock_soar.errors import InvalidQuery, MockSoarError
@@ -99,13 +102,42 @@ def list_submissions(
 
 
 @router.post(
+    "/tickets",
+    response_model=SoarTicketReceipt,
+    operation_id="create_ticket",
+    responses=_errors(422) | {200: {"model": SoarTicketReceipt}, 201: {"model": SoarTicketReceipt}},
+)
+def create_ticket(body: SoarTicketRequest, service: ServiceDep) -> JSONResponse:
+    receipt, status = service.create_ticket(body)
+    return JSONResponse(status_code=status, content=receipt.model_dump(mode="json"))
+
+
+@router.get(
+    "/tickets",
+    response_model=SoarTicketList,
+    operation_id="list_tickets",
+    responses=_errors(422),
+)
+def list_tickets(
+    service: ServiceDep,
+    case_id: Annotated[int | None, Query()] = None,
+) -> SoarTicketList:
+    if case_id is None:
+        raise InvalidQuery(
+            "case_id query parameter is required",
+            details={"case_id": "required"},
+        )
+    return SoarTicketList(items=service.list_tickets(case_id))
+
+
+@router.post(
     "/reset",
     response_model=SoarResetResponse,
     operation_id="reset_submissions",
 )
 def reset(_body: dict[str, object], service: ServiceDep) -> SoarResetResponse:
-    count = service.reset()
-    return SoarResetResponse(submissions=count)
+    submissions, tickets = service.reset()
+    return SoarResetResponse(submissions=submissions, tickets=tickets)
 
 
 def healthz() -> HealthResponse:

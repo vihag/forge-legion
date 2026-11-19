@@ -16,6 +16,7 @@ from services.triage.grok import (
     HttpGrokClient,
     StreamFixtureGrokClient,
 )
+from services.triage.webhook import RoutineWebhook, WebhookPayload
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,9 @@ def run_worker() -> int:
         routing=settings.routing_config,
         model_requested=settings.xai_model,
     )
+    webhook = RoutineWebhook.from_env()
+    if webhook is not None:
+        webhook.start()
     after_seq = 0
     try:
         while True:
@@ -78,6 +82,31 @@ def run_worker() -> int:
                         result.outcome,
                         result.case_id,
                     )
+                    if (
+                        webhook is not None
+                        and result.case_id is not None
+                        and result.outcome != "skipped_existing"
+                    ):
+                        case = case_client.get_case(result.case_id)
+                        if case.status.value == "TRIAGED":
+                            triage_sev = case.triage_severity
+                            splunk_sev = case.splunk_severity
+                            severity = (
+                                triage_sev
+                                if triage_sev is not None
+                                else splunk_sev
+                            )
+                            route = case.route if case.route is not None else "collaborative"
+                            rule = case.rule or ""
+                            webhook.enqueue(
+                                WebhookPayload(
+                                    case_id=result.case_id,
+                                    alert_id=case.alert_id,
+                                    severity=severity,
+                                    route=route,
+                                    rule=rule,
+                                )
+                            )
                 except AlertNotFound:
                     logger.warning("alert missing during triage: %s", alert.alert_id)
             after_seq = page.next_after_seq
@@ -85,6 +114,8 @@ def run_worker() -> int:
     except KeyboardInterrupt:
         return 0
     finally:
+        if webhook is not None:
+            webhook.shutdown()
         case_client.close()
         splunk_client.close()
         grok_client.close()

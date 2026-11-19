@@ -9,7 +9,13 @@ from pathlib import Path
 from types import TracebackType
 from typing import Self
 
-from contracts.mock_soar import SoarApproval, SoarRecord, SoarSubmissionRequest
+from contracts.mock_soar import (
+    SoarApproval,
+    SoarRecord,
+    SoarSubmissionRequest,
+    SoarTicketRecord,
+    SoarTicketRequest,
+)
 from contracts.models import Actor
 
 _SCHEMA_PATH = Path(__file__).resolve().parents[2] / "db" / "mock_soar.sql"
@@ -78,11 +84,14 @@ class SoarStore:
                 self._conn.execute("ROLLBACK")
                 raise
 
-    def reset(self) -> int:
+    def reset(self) -> tuple[int, int]:
         with self._lock:
+            self._conn.execute("DELETE FROM soar_tickets")
             self._conn.execute("DELETE FROM soar_submissions")
-            self._conn.execute("DELETE FROM sqlite_sequence WHERE name = 'soar_submissions'")
-            return 0
+            self._conn.execute(
+                "DELETE FROM sqlite_sequence WHERE name IN ('soar_submissions', 'soar_tickets')"
+            )
+            return 0, 0
 
     def count(self, conn: sqlite3.Connection) -> int:
         row = conn.execute("SELECT COUNT(*) AS n FROM soar_submissions").fetchone()
@@ -115,6 +124,26 @@ class SoarStore:
             (case_id,),
         ).fetchall()
         return [_record_from_row(row) for row in rows]
+
+    def get_ticket_by_case_id(
+        self, conn: sqlite3.Connection, case_id: int
+    ) -> SoarTicketRecord | None:
+        row = conn.execute(
+            "SELECT * FROM soar_tickets WHERE case_id = ?",
+            (case_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return _ticket_from_row(row)
+
+    def list_tickets_by_case_id(
+        self, conn: sqlite3.Connection, case_id: int
+    ) -> list[SoarTicketRecord]:
+        rows = conn.execute(
+            "SELECT * FROM soar_tickets WHERE case_id = ? ORDER BY id",
+            (case_id,),
+        ).fetchall()
+        return [_ticket_from_row(row) for row in rows]
 
 
 def _record_from_row(row: sqlite3.Row) -> SoarRecord:
@@ -167,3 +196,58 @@ def insert_submission(
     if row is None:
         raise RuntimeError("inserted submission missing")
     return _record_from_row(row), True
+
+
+def _ticket_id(case_id: int) -> str:
+    return f"INC-{case_id}"
+
+
+def _ticket_from_row(row: sqlite3.Row) -> SoarTicketRecord:
+    return SoarTicketRecord(
+        ticket_id=str(row["ticket_id"]),
+        case_id=int(row["case_id"]),
+        alert_id=str(row["alert_id"]),
+        disposition_id=int(row["disposition_id"]),
+        title=str(row["title"]),
+        severity=str(row["severity"]),
+        summary=str(row["summary"]),
+        approval=_approval_from_json(str(row["approval_json"])),
+        requested_by=_actor_from_json(str(row["requested_by_json"])),
+        recorded_at=str(row["recorded_at"]),
+    )
+
+
+def insert_ticket(
+    conn: sqlite3.Connection,
+    body: SoarTicketRequest,
+    *,
+    recorded_at: str,
+) -> SoarTicketRecord:
+    ticket_id = _ticket_id(body.case_id)
+    conn.execute(
+        """
+        INSERT INTO soar_tickets (
+            ticket_id, case_id, alert_id, disposition_id, title, severity, summary,
+            approval_json, requested_by_json, recorded_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            ticket_id,
+            body.case_id,
+            body.alert_id,
+            body.disposition_id,
+            body.title,
+            body.severity,
+            body.summary,
+            _approval_json(body.approval),
+            _actor_json(body.requested_by),
+            recorded_at,
+        ),
+    )
+    row = conn.execute(
+        "SELECT * FROM soar_tickets WHERE case_id = ?",
+        (body.case_id,),
+    ).fetchone()
+    if row is None:
+        raise RuntimeError("inserted ticket missing")
+    return _ticket_from_row(row)

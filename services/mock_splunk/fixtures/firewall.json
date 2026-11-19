@@ -1,0 +1,12 @@
+{
+  "source": "firewall",
+  "records": [
+    {
+      "evidence_id": "EV-FW-0001",
+      "timestamp": "2026-11-17T01:12:05Z",
+      "alert_ids": [],
+      "entities": {"user": null, "hosts": ["host-01"]},
+      "content": {"action": "deny"}
+    }
+  ]
+}

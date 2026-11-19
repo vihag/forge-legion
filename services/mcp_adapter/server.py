@@ -148,9 +148,33 @@ def build_mcp_server(
         )
 
     @mcp.tool()
-    def get_case(case_id: int) -> CallToolResult:
-        """Fetch the full case view."""
-        return _run(lambda: client.get_case(case_id))
+    def get_case(
+        case_id: int,
+        include: list[str] | None = None,
+        audit_limit: int | None = None,
+    ) -> CallToolResult:
+        """Fetch a case, optionally with evidence, findings, or audit."""
+        return _run(
+            lambda: client.get_case(case_id, include=include, audit_limit=audit_limit)
+        )
+
+    @mcp.tool()
+    def create_incident_ticket(
+        case_id: int,
+        actor_id: str,
+        summary: str | None = None,
+    ) -> CallToolResult:
+        """Create an incident ticket for an approved case."""
+        denied = _check_actor(actor_id, config)
+        if denied is not None:
+            return denied
+        return _run(
+            lambda: client.create_incident_ticket(
+                case_id,
+                actor=mcp_actor(actor_id),
+                summary=summary,
+            )
+        )
 
     @mcp.tool()
     def get_case_history(case_id: int) -> CallToolResult:

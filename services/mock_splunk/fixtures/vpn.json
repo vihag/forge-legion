@@ -1,0 +1,12 @@
+{
+  "source": "vpn",
+  "records": [
+    {
+      "evidence_id": "EV-VPN-0001",
+      "timestamp": "2026-11-17T01:12:05Z",
+      "alert_ids": [],
+      "entities": {"user": "u.demo", "hosts": []},
+      "content": {"user": "u.demo"}
+    }
+  ]
+}

@@ -21,6 +21,18 @@ class CaseIdInput(APIModel):
     case_id: int = Field(ge=1)
 
 
+class GetCaseInput(APIModel):
+    case_id: int = Field(ge=1)
+    include: list[str] | None = None
+    audit_limit: int | None = Field(default=None, ge=1, le=200)
+
+
+class CreateIncidentTicketInput(APIModel):
+    case_id: int = Field(ge=1)
+    actor_id: str = Field(min_length=1, max_length=60, pattern=MCP_ACTOR_ID_PATTERN)
+    summary: str | None = None
+
+
 class AddEvidenceInput(APIModel):
     case_id: int = Field(ge=1)
     source: str = Field(min_length=1)

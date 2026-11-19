@@ -125,6 +125,18 @@ class SoarSubmitRequest(APIModel):
     actor: Actor
 
 
+class IncidentTicketCreate(APIModel):
+    actor: Actor
+    summary: str | None = None
+
+
+class IncidentTicketResponse(APIModel):
+    ticket_id: str
+    case_id: int
+    created: bool
+    recorded_at: str
+
+
 class Case(APIModel):
     id: int
     alert_id: str

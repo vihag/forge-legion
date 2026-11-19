@@ -958,6 +958,16 @@
             "type": "integer",
             "minimum": 0.0,
             "title": "Next Index"
+          },
+          "hitl_used": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Hitl Used"
+          },
+          "hitl_total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Hitl Total"
           }
         },
         "additionalProperties": false,
@@ -967,7 +977,9 @@
           "rate_per_min",
           "seed",
           "emitted",
-          "next_index"
+          "next_index",
+          "hitl_used",
+          "hitl_total"
         ],
         "title": "StreamStatus"
       },

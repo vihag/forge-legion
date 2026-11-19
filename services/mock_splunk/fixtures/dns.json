@@ -1,0 +1,12 @@
+{
+  "source": "dns",
+  "records": [
+    {
+      "evidence_id": "EV-DNS-0001",
+      "timestamp": "2026-11-17T01:12:05Z",
+      "alert_ids": [],
+      "entities": {"user": null, "hosts": []},
+      "content": {"query": "api.example.com"}
+    }
+  ]
+}

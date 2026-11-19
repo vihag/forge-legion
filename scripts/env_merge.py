@@ -24,13 +24,15 @@ def _parse_keys(path: Path) -> dict[str, str]:
 
 
 def _refuse_secret_key(key: str) -> bool:
+    if key == "ROUTINE_WEBHOOK_URL":
+        return True
     return key.endswith("_TOKEN") or key.endswith("_KEY")
 
 
 def _set_key(target: Path, key: str, value: str) -> int:
     if _refuse_secret_key(key):
         print(f"refused {key}", file=sys.stderr)
-        return 1
+        return 2
     if not target.is_file():
         target.write_text("", encoding="utf-8")
     lines = target.read_text(encoding="utf-8").splitlines()

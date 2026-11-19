@@ -9,7 +9,7 @@ import statistics
 from datetime import UTC, datetime, timedelta
 from typing import Any, Never
 
-from contracts.mock_soar import SoarApproval, SoarSubmissionRequest
+from contracts.mock_soar import SoarApproval, SoarSubmissionRequest, SoarTicketRequest
 from contracts.models import (
     Actor,
     AuditEvent,
@@ -31,6 +31,8 @@ from contracts.models import (
     Finding,
     FindingCreate,
     FindingKind,
+    IncidentTicketCreate,
+    IncidentTicketResponse,
     Metrics,
     MetricsAgent,
     MetricsAssumptions,
@@ -87,6 +89,7 @@ EVENT_PROPOSED = "disposition.proposed"
 EVENT_APPROVED = "disposition.approved"
 EVENT_REJECTED = "disposition.rejected"
 EVENT_SOAR = "soar.submitted"
+EVENT_TICKET = "soar.ticket_created"
 EVENT_REVIEW_FLAGGED = "case.review_flagged"
 EVENT_AUTO_RESOLVED = "case.auto_resolved"
 
@@ -487,6 +490,120 @@ class CaseService:
     def get_case(self, case_id: int) -> Case:
         with self._store.transaction() as conn:
             return self._require_case(conn, case_id)
+
+    _CASE_INCLUDE = frozenset({"evidence", "findings", "audit"})
+
+    def get_case_with_includes(
+        self,
+        case_id: int,
+        *,
+        include: frozenset[str],
+        audit_limit: int,
+    ) -> dict[str, Any]:
+        unknown = include - self._CASE_INCLUDE
+        if unknown:
+            raise DomainValidationError(
+                "unknown include values",
+                details={"include": sorted(unknown)},
+            )
+        if audit_limit < 1 or audit_limit > 200:
+            raise DomainValidationError(
+                "audit_limit out of range",
+                details={"audit_limit": audit_limit},
+            )
+        with self._store.transaction() as conn:
+            case = self._require_case(conn, case_id)
+            payload: dict[str, Any] = case.model_dump(mode="json")
+            if "evidence" in include:
+                payload["evidence"] = [
+                    item.model_dump(mode="json")
+                    for item in self._store.list_evidence(conn, case_id)
+                ]
+            if "findings" in include:
+                payload["findings"] = [
+                    item.model_dump(mode="json")
+                    for item in self._store.list_findings(conn, case_id)
+                ]
+            if "audit" in include:
+                history = self._store.list_history(conn, case_id)
+                if len(history) > audit_limit:
+                    history = history[-audit_limit:]
+                payload["audit"] = [item.model_dump(mode="json") for item in history]
+            return payload
+
+    def create_incident_ticket(
+        self,
+        case_id: int,
+        body: IncidentTicketCreate,
+    ) -> IncidentTicketResponse:
+        if body.actor.type == "system":
+            raise Forbidden(
+                "system actor may not create incident tickets",
+                details={"actor_type": body.actor.type},
+            )
+        now = utc_now()
+        with self._store.transaction() as conn:
+            case = self._require_case(conn, case_id)
+            if case.status in (CaseStatus.AUTO_RESOLVED, CaseStatus.REJECTED, CaseStatus.TRIAGED):
+                raise NoAnalystApproval(
+                    "no analyst approval stored for this case",
+                    details={"case_id": case_id, "status": case.status.value},
+                )
+            if case.status not in (CaseStatus.APPROVED, CaseStatus.SUBMITTED):
+                raise NoAnalystApproval(
+                    "incident ticket requires analyst approval",
+                    details={"case_id": case_id, "status": case.status.value},
+                )
+            disposition = self._require_open_disposition(conn, case_id)
+            decision = self._store.get_decision_for_disposition(conn, disposition.id)
+            if decision is None or decision.decision != "approve":
+                raise NoAnalystApproval(
+                    "no analyst approval stored for this case",
+                    details={"case_id": case_id, "disposition_id": disposition.id},
+                )
+            severity = (
+                case.triage_severity if case.triage_severity is not None else case.splunk_severity
+            )
+            summary = body.summary if body.summary is not None else (case.summary or case.title)
+            ticket_request = SoarTicketRequest(
+                case_id=case_id,
+                alert_id=case.alert_id,
+                disposition_id=disposition.id,
+                title=case.title,
+                severity=severity,
+                summary=summary,
+                approval=SoarApproval(
+                    decision_id=decision.id,
+                    decision=decision.decision,
+                    approver=Actor(id=decision.analyst_id, type="analyst"),
+                    decided_at=decision.created_at,
+                ),
+                requested_by=body.actor,
+            )
+            try:
+                receipt = self._soar.create_ticket(ticket_request)
+            except SoarError as exc:
+                raise SoarUnavailable(exc.message, details={"case_id": case_id}) from exc
+            if receipt.created:
+                self._audit(
+                    conn,
+                    case_id=case_id,
+                    ts=now,
+                    event_type=EVENT_TICKET,
+                    actor=body.actor,
+                    from_status=case.status.value,
+                    to_status=case.status.value,
+                    payload={
+                        "ticket_id": receipt.ticket_id,
+                        "disposition_id": disposition.id,
+                    },
+                )
+            return IncidentTicketResponse(
+                ticket_id=receipt.ticket_id,
+                case_id=receipt.case_id,
+                created=receipt.created,
+                recorded_at=receipt.recorded_at,
+            )
 
     def list_cases(
         self,
