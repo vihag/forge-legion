@@ -1,0 +1,16 @@
+---
+description: FORGE case API architecture guardrails
+alwaysApply: true
+---
+
+# Case API architecture
+
+These rules apply to the FORGE case store and `/v1` case API.
+
+1. Business rules live only in `services/case_api/service.py`. That includes transitions, approval checks, duplicate guards, and audit writes. Bots and UIs never decide state; they only call the API.
+2. The transition table is one pure dict, `TRANSITIONS`, in `services/case_api/state.py`, together with `check_transition()`. `state.py` does no I/O and does not touch SQLite or HTTP.
+3. Each mutating call is one SQLite transaction. The state change and its audit event commit together or not at all. A rejected call (any 4xx) writes no event.
+4. Routes in `services/case_api/routes.py` only parse input, call the service, and map errors. They hold no transition or validation rules.
+5. `CaseService` takes a store and a `SoarClient` by injection. `services/case_api/app.py` is a factory only.
+6. `/v1` is backward compatible: additive changes only. Never remove or rename a field, status, or path. Breaking changes go to `/v2`.
+7. Modules stay independently testable: `state.py` has no I/O, the service runs without HTTP, and routes hold no logic.
