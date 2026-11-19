@@ -173,21 +173,40 @@ jobs:
       - name: Stream and metrics smoke
         run: |
           set -a && . ./.env.local && set +a
-          curl -sf -X POST "$PUBLIC_BASE_URL/splunk/v1/stream/start" -H 'content-type: application/json' -d '{}'
-          sleep 90
+          base="${PUBLIC_BASE_URL:-http://localhost:8080}"
+          base="${base%/}"
+          curl -f --max-time 30 -X POST "${base}/splunk/v1/stream/stop" \
+            -H 'content-type: application/json' -d '{}' || true
+          curl -f --max-time 30 -X POST "${base}/splunk/v1/stream/start" \
+            -H 'content-type: application/json' -d '{"mode":"random"}'
           python3 - <<'PY'
           import json
           import os
+          import sys
+          import time
           import urllib.request
 
           base = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8080").rstrip("/")
-          with urllib.request.urlopen(f"{base}/case/v1/metrics") as resp:
-              metrics = json.loads(resp.read())
-          counts = metrics.get("counts", {})
-          assert counts.get("total", 0) >= 3, metrics
-          assert counts.get("auto_resolved", 0) >= 1, metrics
+          deadline = time.time() + 120
+          last: dict[str, object] | None = None
+          while time.time() < deadline:
+              with urllib.request.urlopen(f"{base}/case/v1/metrics", timeout=30) as resp:
+                  last = json.loads(resp.read().decode("utf-8"))
+              counts = last.get("counts", {}) if isinstance(last, dict) else {}
+              total = int(counts.get("total", 0))
+              auto_resolved = int(counts.get("auto_resolved", 0))
+              if total >= 3 and auto_resolved >= 1:
+                  print(json.dumps(counts))
+                  raise SystemExit(0)
+              time.sleep(5)
+          print(
+              f"stream metrics smoke timed out: {json.dumps(last)}",
+              file=sys.stderr,
+          )
+          raise SystemExit(1)
           PY
-          curl -sf -X POST "$PUBLIC_BASE_URL/splunk/v1/stream/stop" -H 'content-type: application/json' -d '{}'
+          curl -f --max-time 30 -X POST "${base}/splunk/v1/stream/stop" \
+            -H 'content-type: application/json' -d '{}'
       - name: Reset stores
         run: |
           set -a && . ./.env.local && set +a
