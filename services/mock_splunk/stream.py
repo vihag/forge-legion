@@ -173,8 +173,15 @@ def _emit_one(
     alert_id = f"SPL-STR-{stream_index + 1:06d}"
     title = render_template(scenario.alert.title, entities)
     summary = render_template(scenario.alert.description, entities)
-    base_time = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC) if clock is None else clock()
-    triggered_at = base_time + timedelta(seconds=stream_index * 37)
+    if clock is None:
+        # Offline batch generation: synthesize spaced timestamps from a fixed epoch.
+        triggered_at = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC) + timedelta(
+            seconds=stream_index * 37
+        )
+    else:
+        # Live stream: the clock already advances per tick; adding an index offset
+        # would push alerts into the future and make time-to-triage negative.
+        triggered_at = clock()
     splunk_entities = _entities_to_splunk(entities)
     mitre = scenario.mitre_techniques or ["T1078"]
     alert = Alert(
