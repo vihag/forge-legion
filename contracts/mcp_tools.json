@@ -350,7 +350,7 @@
   },
   {
     "name": "search_evidence",
-    "description": "Search Splunk evidence in a time window (start <= timestamp < end, ISO-8601 UTC).\n\nOmit start/end to search the last 72 hours up to now. Use source \"*\" for all\nsources; entity matches a user, IP, country code or host.\n",
+    "description": "Search Splunk evidence by time window (start <= timestamp < end, ISO-8601 UTC); omit start/end for the last 72 h up to now; source \"*\" = all sources; entity = user, IP, country or host.",
     "inputSchema": {
       "properties": {
         "source": {

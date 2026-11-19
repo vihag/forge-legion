@@ -312,11 +312,7 @@ def build_mcp_server(
         end: str | None = None,
         entity: str | None = None,
     ) -> CallToolResult:
-        """Search Splunk evidence in a time window (start <= timestamp < end, ISO-8601 UTC).
-
-        Omit start/end to search the last 72 hours up to now. Use source "*" for all
-        sources; entity matches a user, IP, country code or host.
-        """
+        """Search Splunk evidence by time window (start <= timestamp < end, ISO-8601 UTC); omit start/end for the last 72 h up to now; source "*" = all sources; entity = user, IP, country or host."""  # noqa: E501
         start, end = default_search_window(start, end)
         try:
             return _tool_ok(
