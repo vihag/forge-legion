@@ -74,7 +74,7 @@ jobs:
           make health
       - name: Triage seed
         run: |
-          make triage-seed | tee triage.json
+          make triage-seed 2>triage.stderr | tee triage.json
           python scripts/assert_seed_triaged.py triage.json
       - name: Health fails when SOAR is down
         run: |
