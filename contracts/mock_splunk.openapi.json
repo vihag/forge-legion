@@ -766,11 +766,17 @@
         "title": "ReplayRequest"
       },
       "ResetRequest": {
-        "properties": {},
+        "properties": {
+          "seed_hero": {
+            "type": "boolean",
+            "title": "Seed Hero",
+            "default": true
+          }
+        },
         "additionalProperties": false,
         "type": "object",
         "title": "ResetRequest",
-        "description": "Empty JSON object. Extra fields are rejected."
+        "description": "Reset body; ``seed_hero: false`` skips the fixture alert(s). Extra fields rejected."
       },
       "ResetResponse": {
         "properties": {

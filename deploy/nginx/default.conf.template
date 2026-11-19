@@ -2,6 +2,14 @@ server {
     listen ${GATEWAY_PORT};
     server_name _;
 
+    # Re-resolve upstream names via Docker DNS so recreated containers (new IPs)
+    # don't leave the gateway returning 502 until nginx restarts.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $case_upstream ${CASE_API_UPSTREAM};
+    set $splunk_upstream ${MOCK_SPLUNK_UPSTREAM};
+    set $soar_upstream ${MOCK_SOAR_UPSTREAM};
+    set $mcp_upstream ${MCP_UPSTREAM};
+
     location = /healthz {
         default_type application/json;
         return 200 '{"status":"ok"}';
@@ -17,7 +25,8 @@ server {
     }
 
     location /case/ {
-        proxy_pass http://${CASE_API_UPSTREAM}/;
+        rewrite ^/case/(.*)$ /$1 break;
+        proxy_pass http://$case_upstream;
         proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -25,7 +34,8 @@ server {
     }
 
     location /splunk/ {
-        proxy_pass http://${MOCK_SPLUNK_UPSTREAM}/;
+        rewrite ^/splunk/(.*)$ /$1 break;
+        proxy_pass http://$splunk_upstream;
         proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -33,7 +43,8 @@ server {
     }
 
     location /soar/ {
-        proxy_pass http://${MOCK_SOAR_UPSTREAM}/;
+        rewrite ^/soar/(.*)$ /$1 break;
+        proxy_pass http://$soar_upstream;
         proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -41,7 +52,7 @@ server {
     }
 
     location = /mcp/healthz {
-        proxy_pass http://${MCP_UPSTREAM}/healthz;
+        proxy_pass http://$mcp_upstream/healthz;
         proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -49,7 +60,7 @@ server {
     }
 
     location = /mcp {
-        proxy_pass http://${MCP_UPSTREAM};
+        proxy_pass http://$mcp_upstream;
         proxy_http_version 1.1;
         proxy_buffering off;
         proxy_read_timeout 300s;
@@ -61,7 +72,7 @@ server {
     }
 
     location /mcp/ {
-        proxy_pass http://${MCP_UPSTREAM};
+        proxy_pass http://$mcp_upstream;
         proxy_http_version 1.1;
         proxy_buffering off;
         proxy_read_timeout 300s;
@@ -73,7 +84,7 @@ server {
     }
 
     location = /mcp-analyst {
-        proxy_pass http://${MCP_UPSTREAM};
+        proxy_pass http://$mcp_upstream;
         proxy_http_version 1.1;
         proxy_buffering off;
         proxy_read_timeout 300s;
@@ -85,7 +96,7 @@ server {
     }
 
     location /mcp-analyst/ {
-        proxy_pass http://${MCP_UPSTREAM};
+        proxy_pass http://$mcp_upstream;
         proxy_http_version 1.1;
         proxy_buffering off;
         proxy_read_timeout 300s;
@@ -105,6 +116,14 @@ server {
     listen ${PUBLIC_GATEWAY_PORT};
     server_name _;
 
+    # Re-resolve upstream names via Docker DNS so recreated containers (new IPs)
+    # don't leave the gateway returning 502 until nginx restarts.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $case_upstream ${CASE_API_UPSTREAM};
+    set $splunk_upstream ${MOCK_SPLUNK_UPSTREAM};
+    set $soar_upstream ${MOCK_SOAR_UPSTREAM};
+    set $mcp_upstream ${MCP_UPSTREAM};
+
     location = /healthz {
         default_type application/json;
         add_header X-Forge-Public 1;
@@ -112,7 +131,7 @@ server {
     }
 
     location = /mcp/healthz {
-        proxy_pass http://${MCP_UPSTREAM}/healthz;
+        proxy_pass http://$mcp_upstream/healthz;
         proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -120,7 +139,7 @@ server {
     }
 
     location = /mcp {
-        proxy_pass http://${MCP_UPSTREAM};
+        proxy_pass http://$mcp_upstream;
         proxy_http_version 1.1;
         proxy_buffering off;
         proxy_read_timeout 300s;
@@ -132,7 +151,7 @@ server {
     }
 
     location /mcp/ {
-        proxy_pass http://${MCP_UPSTREAM};
+        proxy_pass http://$mcp_upstream;
         proxy_http_version 1.1;
         proxy_buffering off;
         proxy_read_timeout 300s;
@@ -144,7 +163,7 @@ server {
     }
 
     location = /mcp-analyst {
-        proxy_pass http://${MCP_UPSTREAM};
+        proxy_pass http://$mcp_upstream;
         proxy_http_version 1.1;
         proxy_buffering off;
         proxy_read_timeout 300s;
@@ -156,7 +175,7 @@ server {
     }
 
     location /mcp-analyst/ {
-        proxy_pass http://${MCP_UPSTREAM};
+        proxy_pass http://$mcp_upstream;
         proxy_http_version 1.1;
         proxy_buffering off;
         proxy_read_timeout 300s;

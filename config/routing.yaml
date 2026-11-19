@@ -1,6 +1,6 @@
 version: 1
 privileged_account_patterns: ['^adm\.', '^da-', '^svc-admin']
-crown_jewel_hosts: [FIN-DB-01]
+crown_jewel_hosts: [FIN-DB-01, DC-01, DC-02, JMP-01, PAY-APP-02, SWIFT-GW-01]
 rules:
   - {name: privileged_account_collaborative, when: {privileged_account: true}, route: collaborative}
   - {name: splunk_high_or_critical_collaborative, when: {splunk_severity_in: [high, critical]}, route: collaborative}

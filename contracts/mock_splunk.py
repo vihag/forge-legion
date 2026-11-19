@@ -81,7 +81,9 @@ class SourceList(APIModel):
 
 
 class ResetRequest(APIModel):
-    """Empty JSON object. Extra fields are rejected."""
+    """Reset body; ``seed_hero: false`` skips the fixture alert(s). Extra fields rejected."""
+
+    seed_hero: bool = True
 
 
 class ResetResponse(APIModel):

@@ -312,17 +312,23 @@ class SplunkStore:
     def loaded_evidence(self) -> list[SplunkEvidence]:
         return list(self._evidence)
 
-    def reset(self) -> ResetResponse:
-        """Reload fixtures, drop replays, and restore seeded sequence numbers."""
+    def reset(self, *, seed_hero: bool = True) -> ResetResponse:
+        """Reload fixtures, drop replays, and restore seeded sequence numbers.
+
+        With ``seed_hero=False`` the fixture alerts (the seeded hero story) and their
+        evidence are not loaded, so the store starts empty for a scripted run.
+        """
         if self._stream_engine is not None:
             self._stream_engine.stop()
         loaded = _load_fixtures(self._fixtures_dir)
         loaded = _restamp_seed_hero(loaded, _aware_clock(self._clock()))
+        alerts = list(loaded.alerts) if seed_hero else []
+        evidence = list(loaded.evidence) if seed_hero else []
         self._seed_version = loaded.seed_version
-        self._alerts = {alert.alert_id: alert for alert in loaded.alerts}
-        self._order = [alert.alert_id for alert in loaded.alerts]
-        self._evidence = list(loaded.evidence)
-        self._replay_counts = {alert.alert_id: 0 for alert in loaded.alerts}
+        self._alerts = {alert.alert_id: alert for alert in alerts}
+        self._order = [alert.alert_id for alert in alerts]
+        self._evidence = evidence
+        self._replay_counts = {alert.alert_id: 0 for alert in alerts}
         self._next_seq = max((alert.seq for alert in loaded.alerts), default=0) + 1
         self._stream_emitted = 0
         self._stream_next_index = 0

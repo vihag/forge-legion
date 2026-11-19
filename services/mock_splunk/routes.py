@@ -157,8 +157,8 @@ def list_sources(store: StoreDep) -> SourceList:
     operation_id="reset",
     responses=_errors(422),
 )
-def reset_fixtures(_body: ResetRequest, store: StoreDep) -> ResetResponse:
-    return store.reset()
+def reset_fixtures(body: ResetRequest, store: StoreDep) -> ResetResponse:
+    return store.reset(seed_hero=body.seed_hero)
 
 
 @router.post(
