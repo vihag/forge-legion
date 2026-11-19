@@ -1,0 +1,55 @@
+{
+  "source": "edr",
+  "records": [
+    {
+      "evidence_id": "EV-EDR-0001",
+      "timestamp": "2026-11-18T02:06:02Z",
+      "alert_ids": ["SPL-2026-0001"],
+      "entities": {
+        "user": "adm.mtan",
+        "src_ip": "10.20.0.5",
+        "hosts": ["JMP-01"]
+      },
+      "content": {
+        "host": "JMP-01",
+        "event": "logon",
+        "logon_type": 10,
+        "user": "adm.mtan",
+        "src_ip": "10.20.0.5"
+      }
+    },
+    {
+      "evidence_id": "EV-EDR-0002",
+      "timestamp": "2026-11-18T02:12:18Z",
+      "alert_ids": ["SPL-2026-0001"],
+      "entities": {
+        "hosts": ["JMP-01"]
+      },
+      "content": {
+        "host": "JMP-01",
+        "event": "process",
+        "image": "mstsc.exe",
+        "cmdline": "mstsc.exe /v:FIN-DB-01",
+        "parent": "explorer.exe"
+      }
+    },
+    {
+      "evidence_id": "EV-EDR-0003",
+      "timestamp": "2026-11-18T02:12:40Z",
+      "alert_ids": ["SPL-2026-0001"],
+      "entities": {
+        "user": "adm.mtan",
+        "src_ip": "10.10.5.21",
+        "hosts": ["FIN-DB-01", "JMP-01"]
+      },
+      "content": {
+        "host": "FIN-DB-01",
+        "event": "logon",
+        "logon_type": 10,
+        "user": "adm.mtan",
+        "src_host": "JMP-01",
+        "src_ip": "10.10.5.21"
+      }
+    }
+  ]
+}

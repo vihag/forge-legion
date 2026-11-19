@@ -1,4 +1,4 @@
-"""Write contracts/openapi.json from the live app, or fail when the file has drifted.
+"""Write the committed OpenAPI specs from the live apps, or fail when one has drifted.
 
 Usage:
     python scripts/export_openapi.py
@@ -9,16 +9,23 @@ import difflib
 import json
 import sys
 from pathlib import Path
+from typing import Literal, Never
 
-from services.case_api.app import create_app
+from services.case_api.app import create_app as create_case_app
 from services.case_api.store import Store
+from services.mock_splunk.app import create_app as create_splunk_app
 
 ROOT = Path(__file__).resolve().parents[1]
-SPEC_PATH = ROOT / "contracts" / "openapi.json"
+SpecName = Literal["case_api", "mock_splunk"]
+
+SPECS: dict[str, str] = {
+    "case_api": "contracts/openapi.json",
+    "mock_splunk": "contracts/mock_splunk.openapi.json",
+}
 
 
-def canonical_openapi() -> str:
-    app = create_app(db_path=":memory:")
+def _case_api_openapi() -> str:
+    app = create_case_app(db_path=":memory:")
     try:
         spec = app.openapi()
     finally:
@@ -28,33 +35,63 @@ def canonical_openapi() -> str:
     return json.dumps(spec, indent=2) + "\n"
 
 
+def _mock_splunk_openapi() -> str:
+    app = create_splunk_app()
+    return json.dumps(app.openapi(), indent=2) + "\n"
+
+
+def canonical_openapi(spec_name: str) -> str:
+    name = _as_spec_name(spec_name)
+    match name:
+        case "case_api":
+            return _case_api_openapi()
+        case "mock_splunk":
+            return _mock_splunk_openapi()
+        case _ as unreachable:
+            never_name: Never = unreachable
+            raise RuntimeError(f"unhandled spec {never_name}")
+
+
+def _as_spec_name(value: str) -> SpecName:
+    if value == "case_api" or value == "mock_splunk":
+        return value
+    raise ValueError(f"unknown spec {value}")
+
+
+def _check(relative: str, live: str) -> bool:
+    path = ROOT / relative
+    if not path.is_file():
+        print(f"{relative} is missing", file=sys.stderr)
+        return False
+    committed = path.read_text(encoding="utf-8")
+    if committed == live:
+        return True
+    print(f"OpenAPI drift: {relative} does not match the live app", file=sys.stderr)
+    diff = "".join(
+        difflib.unified_diff(
+            committed.splitlines(keepends=True),
+            live.splitlines(keepends=True),
+            fromfile=relative,
+            tofile="live",
+        )
+    )
+    sys.stderr.write(diff[:8000])
+    return False
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    text = canonical_openapi()
+    generated = {name: canonical_openapi(name) for name in SPECS}
     if "--check" in args:
-        if not SPEC_PATH.is_file():
-            print("contracts/openapi.json is missing", file=sys.stderr)
-            return 1
-        committed = SPEC_PATH.read_text(encoding="utf-8")
-        if committed != text:
-            print(
-                "OpenAPI drift: contracts/openapi.json does not match the live app",
-                file=sys.stderr,
-            )
-            diff = "".join(
-                difflib.unified_diff(
-                    committed.splitlines(keepends=True),
-                    text.splitlines(keepends=True),
-                    fromfile="contracts/openapi.json",
-                    tofile="live",
-                )
-            )
-            sys.stderr.write(diff[:8000])
-            return 1
-        return 0
-    SPEC_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SPEC_PATH.write_text(text, encoding="utf-8")
-    print(f"wrote {SPEC_PATH}")
+        ok = True
+        for name, relative in SPECS.items():
+            ok = _check(relative, generated[name]) and ok
+        return 0 if ok else 1
+    for name, relative in SPECS.items():
+        path = ROOT / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(generated[name], encoding="utf-8")
+        print(f"wrote {path}")
     return 0
 
 

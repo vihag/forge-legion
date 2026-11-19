@@ -1,0 +1,1 @@
+"""Mock Splunk acceptance tests."""
