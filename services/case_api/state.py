@@ -11,18 +11,25 @@ PROPOSE_DISPOSITION = "propose_disposition"
 APPROVE = "approve"
 REJECT = "reject"
 SUBMIT_TO_SOAR = "submit_to_soar"
+FLAG_REVIEW = "flag_review"
 
 # operation -> from_status -> to_status. None keeps the current status.
 TRANSITIONS: dict[str, dict[str, str | None]] = {
     TRIAGE: {
         "NEW": "TRIAGED",
         "TRIAGED": "TRIAGED",
+        "NEEDS_REVIEW": "TRIAGED",
     },
     ADD_EVIDENCE: {
         "NEW": None,
         "TRIAGED": None,
         "INVESTIGATING": None,
         "REJECTED": None,
+        "NEEDS_REVIEW": None,
+    },
+    FLAG_REVIEW: {
+        "NEW": "NEEDS_REVIEW",
+        "TRIAGED": "NEEDS_REVIEW",
     },
     RECORD_FINDING: {
         "TRIAGED": "INVESTIGATING",

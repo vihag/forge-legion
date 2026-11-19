@@ -2,7 +2,7 @@
 
 FORGE × LEGION: agentic SOC triage and investigation on legacy Splunk, powered by Grok Bots, LangGraph and the Grok API.
 
-This repository ships the C1 case store and case API (`/v1`) and the C2 Mock Splunk service. The binding contracts are [`contracts/C1-contract.md`](contracts/C1-contract.md) and [`contracts/C2-contract.md`](contracts/C2-contract.md).
+This repository ships the C1 case store and case API (`/v1`), the C2 Mock Splunk service, and the C3 LangGraph triage runner. The binding contracts are [`contracts/C1-contract.md`](contracts/C1-contract.md), [`contracts/C2-contract.md`](contracts/C2-contract.md), and [`contracts/C3-contract.md`](contracts/C3-contract.md).
 
 ## Setup
 
@@ -44,12 +44,37 @@ Mock Splunk reloads its fixtures and drops replays. State is in memory, so resta
 curl -X POST http://127.0.0.1:8001/v1/reset -H 'content-type: application/json' -d '{}'
 ```
 
+## Triage (C3)
+
+Run one alert through LangGraph triage (requires Mock Splunk and Case API URLs, or use the smoke script which starts both in-process):
+
+```bash
+export CASE_API_URL=http://127.0.0.1:8000
+export MOCK_SPLUNK_URL=http://127.0.0.1:8001
+export XAI_API_KEY=...  # required for live Grok
+python -m services.triage run --alert-id SPL-2026-0001
+```
+
+Live smoke (real Grok call, prints `TriageResult` JSON). Exits **2** when `XAI_API_KEY` is unset:
+
+```bash
+make triage-smoke
+```
+
+Record a fresh Grok fixture after a successful smoke:
+
+```bash
+make triage-record
+```
+
+CI uses recorded fixtures under `tests/triage/fixtures/` and blocks outbound network.
+
 ## Test
 
 ```bash
-ruff check .
-mypy
-pytest
+make lint
+make mypy
+make test
 python scripts/export_openapi.py --check
 ```
 

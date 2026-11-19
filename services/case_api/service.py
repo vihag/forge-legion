@@ -26,6 +26,7 @@ from contracts.models import (
     Finding,
     FindingCreate,
     FindingKind,
+    ReviewFlagCreate,
     Severity,
     SoarSubmission,
     SoarSubmitRequest,
@@ -44,6 +45,7 @@ from services.case_api.soar import SoarClient, SoarError
 from services.case_api.state import (
     ADD_EVIDENCE,
     APPROVE,
+    FLAG_REVIEW,
     PROPOSE_DISPOSITION,
     RECORD_FINDING,
     REJECT,
@@ -68,6 +70,7 @@ EVENT_PROPOSED = "disposition.proposed"
 EVENT_APPROVED = "disposition.approved"
 EVENT_REJECTED = "disposition.rejected"
 EVENT_SOAR = "soar.submitted"
+EVENT_REVIEW_FLAGGED = "case.review_flagged"
 
 
 def utc_now() -> str:
@@ -389,6 +392,7 @@ class CaseService:
         *,
         status: CaseStatus | None,
         severity: Severity | None,
+        alert_id: str | None,
         limit: int,
         offset: int,
     ) -> CaseList:
@@ -399,10 +403,29 @@ class CaseService:
                 conn,
                 status=status_value,
                 severity=severity,
+                alert_id=alert_id,
                 limit=limit,
                 offset=offset,
             )
         return CaseList(items=items, total=total)
+
+    def flag_review(self, case_id: int, body: ReviewFlagCreate) -> Case:
+        now = utc_now()
+        with self._store.transaction() as conn:
+            case = self._require_case(conn, case_id)
+            to_status = self._require_transition(FLAG_REVIEW, case.status)
+            updated = self._store.update_case_status(conn, case_id, to_status.value, now)
+            self._audit(
+                conn,
+                case_id=case_id,
+                ts=now,
+                event_type=EVENT_REVIEW_FLAGGED,
+                actor=body.actor,
+                from_status=case.status.value,
+                to_status=to_status.value,
+                payload={"reason": body.reason, "detail": body.detail},
+            )
+            return updated
 
     def list_evidence(self, case_id: int) -> list[Evidence]:
         with self._store.transaction() as conn:

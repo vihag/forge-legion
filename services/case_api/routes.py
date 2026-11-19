@@ -24,6 +24,7 @@ from contracts.models import (
     Finding,
     FindingCreate,
     HealthResponse,
+    ReviewFlagCreate,
     Severity,
     SoarSubmission,
     SoarSubmitRequest,
@@ -113,10 +114,17 @@ def list_cases(
     service: ServiceDep,
     status: Annotated[CaseStatus | None, Query()] = None,
     severity: Annotated[Severity | None, Query()] = None,
+    alert_id: Annotated[str | None, Query(min_length=1)] = None,
     limit: Annotated[int, Query(ge=1, le=CASE_PAGE_MAX)] = CASE_PAGE_DEFAULT,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CaseList:
-    return service.list_cases(status=status, severity=severity, limit=limit, offset=offset)
+    return service.list_cases(
+        status=status,
+        severity=severity,
+        alert_id=alert_id,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post(
@@ -148,6 +156,16 @@ def get_case(case_id: int, service: ServiceDep) -> Case:
 )
 def triage_case(case_id: int, body: TriageCreate, service: ServiceDep) -> Case:
     return service.triage_case(case_id, body)
+
+
+@router.post(
+    "/cases/{case_id}/review-flag",
+    response_model=Case,
+    operation_id="flag_review",
+    responses=_errors(404, 409, 422),
+)
+def flag_review(case_id: int, body: ReviewFlagCreate, service: ServiceDep) -> Case:
+    return service.flag_review(case_id, body)
 
 
 @router.get(

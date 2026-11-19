@@ -13,6 +13,7 @@ STATUSES = [
     "APPROVED",
     "REJECTED",
     "SUBMITTED",
+    "NEEDS_REVIEW",
 ]
 
 OPERATIONS = [
@@ -24,6 +25,7 @@ OPERATIONS = [
     "approve",
     "reject",
     "submit_to_soar",
+    "flag_review",
 ]
 
 # Resulting status for every allowed (operation, from_status) pair in §2.
@@ -31,10 +33,14 @@ OPERATIONS = [
 DOCUMENTED: dict[tuple[str, str], str] = {
     ("triage", "NEW"): "TRIAGED",
     ("triage", "TRIAGED"): "TRIAGED",
+    ("triage", "NEEDS_REVIEW"): "TRIAGED",
     ("add_evidence", "NEW"): "NEW",
     ("add_evidence", "TRIAGED"): "TRIAGED",
     ("add_evidence", "INVESTIGATING"): "INVESTIGATING",
     ("add_evidence", "REJECTED"): "REJECTED",
+    ("add_evidence", "NEEDS_REVIEW"): "NEEDS_REVIEW",
+    ("flag_review", "NEW"): "NEEDS_REVIEW",
+    ("flag_review", "TRIAGED"): "NEEDS_REVIEW",
     ("record_finding", "TRIAGED"): "INVESTIGATING",
     ("record_finding", "INVESTIGATING"): "INVESTIGATING",
     ("record_finding", "REJECTED"): "INVESTIGATING",

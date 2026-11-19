@@ -1,0 +1,14 @@
+{
+  "id": "chatcmpl-fixture-unknown-evidence",
+  "model": "grok-4.3",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"original_severity\":\"medium\",\"assessed_severity\":\"high\",\"assessment_confidence\":0.5,\"rationale\":\"references unknown evidence.\",\"evidence_references\":[\"EV-FAKE-9999\"],\"mitre_techniques\":[\"T1078\"],\"recommended_route\":\"review\",\"additional_evidence_needed\":[]}"
+      }
+    }
+  ],
+  "usage": {}
+}

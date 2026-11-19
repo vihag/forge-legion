@@ -431,6 +431,7 @@ class Store:
         *,
         status: str | None,
         severity: str | None,
+        alert_id: str | None,
         limit: int,
         offset: int,
     ) -> tuple[list[CaseSummary], int]:
@@ -442,6 +443,9 @@ class Store:
         if severity is not None:
             clauses.append("COALESCE(triage_severity, splunk_severity) = ?")
             params.append(severity)
+        if alert_id is not None:
+            clauses.append("alert_id = ?")
+            params.append(alert_id)
         # Fragments above are fixed SQL. Filter values are bound parameters.
         where = " AND ".join(clauses)
         count_row = conn.execute(
