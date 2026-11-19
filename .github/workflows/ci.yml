@@ -175,7 +175,7 @@ jobs:
           with urllib.request.urlopen(f"http://nginx:{port}/console/") as resp:
               body = resp.read().decode("utf-8")
               assert resp.getcode() == 200, resp.getcode()
-          assert "LIVE SHIFT" in body
+          assert "LEGION Command Center" in body
           PY
       - name: Stream and metrics smoke
         run: |
