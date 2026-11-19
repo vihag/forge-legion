@@ -319,9 +319,13 @@ def _emit_one(
         scenario_id=scenario.id,
     )
     evidence_rows: list[SplunkEvidence] = []
+    # Evidence must never post-date the alert (an analyst querying "now" would see
+    # future events). Shift the whole story back so the latest record lands at the
+    # alert time; relative order and gaps between records are preserved.
+    latest_offset_s = max([0, *(record.offset_s for record in scenario.evidence)])
     for index, record in enumerate(scenario.evidence, start=1):
         evidence_id = f"EV-STR-{stream_index + 1:04d}-{index}"
-        timestamp = triggered_at + timedelta(seconds=record.offset_s)
+        timestamp = triggered_at + timedelta(seconds=record.offset_s - latest_offset_s)
         rendered = {
             key: render_template(str(value), entities) if isinstance(value, str) else value
             for key, value in record.fields.items()

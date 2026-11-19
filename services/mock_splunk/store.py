@@ -211,7 +211,10 @@ def _restamp_seed_hero(loaded: _LoadedSeed, now: datetime) -> _LoadedSeed:
     hero = next((alert for alert in loaded.alerts if alert.alert_id == _SEED_HERO_ALERT_ID), None)
     if hero is None:
         return loaded
-    shift = now - hero.triggered_at
+    # Anchor on the latest hero record so no evidence is later than the restamped
+    # alert (``now``); gaps between evidence records are preserved.
+    hero_times = [row.timestamp for row in loaded.evidence if _SEED_HERO_ALERT_ID in row.alert_ids]
+    shift = now - max([hero.triggered_at, *hero_times])
     alerts = [
         alert.model_copy(update={"triggered_at": now, "emitted_at": now})
         if alert.alert_id == _SEED_HERO_ALERT_ID
