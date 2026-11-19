@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import socket
 from pathlib import Path
@@ -71,12 +72,13 @@ def test_persists_returned_model_not_requested(triage_stack: TriageDeps) -> None
 
 
 def test_persists_response_id_and_request_id(triage_stack: TriageDeps) -> None:
+    expected_id = json.loads((FIXTURES / "grok_seed_ok.json").read_text())["id"]
     result = run_triage(triage_stack, ALERT_ID)
-    assert result.response_id == "chatcmpl-fixture-seed-0001"
+    assert result.response_id == expected_id
     evidence = triage_stack.case_client.list_evidence(result.case_id)  # type: ignore[arg-type]
     assessment = next(item for item in evidence if item.source == "triage_assessment")
-    assert assessment.ref == "chatcmpl-fixture-seed-0001"
-    assert assessment.content["response_id"] == "chatcmpl-fixture-seed-0001"
+    assert assessment.ref == expected_id
+    assert assessment.content["response_id"] == expected_id
 
 
 def test_mitre_and_triggered_at_in_evidence_and_rationale(triage_stack: TriageDeps) -> None:

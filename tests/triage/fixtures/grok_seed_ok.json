@@ -1,22 +1,31 @@
 {
-  "_fixture_note": "Hand-written xAI chat-completions shape for CI. Replace via make triage-record.",
-  "id": "chatcmpl-fixture-seed-0001",
-  "object": "chat.completion",
-  "created": 1763428800,
+  "id": "a62cde1c-6f39-9a97-aed0-0c2f10684b2f",
   "model": "grok-4.3",
   "choices": [
     {
-      "index": 0,
       "message": {
         "role": "assistant",
-        "content": "{\"original_severity\":\"medium\",\"assessed_severity\":\"high\",\"assessment_confidence\":0.82,\"rationale\":\"Privileged authentication from a new country is followed by RDP lateral movement and large outbound transfers.\",\"evidence_references\":[\"EV-AUTH-0002\",\"EV-AUTH-0003\",\"EV-EDR-0001\",\"EV-EDR-0002\",\"EV-EDR-0003\",\"EV-PROXY-0001\",\"EV-PROXY-0002\"],\"mitre_techniques\":[\"T1078\",\"T1021\"],\"recommended_route\":\"autonomous\",\"additional_evidence_needed\":[]}"
-      },
-      "finish_reason": "stop"
+        "content": "{\n  \"original_severity\": \"medium\",\n  \"assessed_severity\": \"high\",\n  \"assessment_confidence\": 0.8,\n  \"rationale\": \"Privileged domain admin login from new country (first_seen_country) succeeded after failed attempt, followed by RDP lateral movement to JMP-01 and FIN-DB-01 plus rclone download/upload activity strongly indicates account compromise and data exfiltration.\",\n  \"evidence_references\": [\"EV-AUTH-0002\", \"EV-AUTH-0003\", \"EV-EDR-0001\", \"EV-EDR-0002\", \"EV-EDR-0003\", \"EV-PROXY-0001\", \"EV-PROXY-0002\"],\n  \"recommended_route\": \"collaborative\",\n  \"mitre_techniques\": [\"T1078\", \"T1021\"],\n  \"additional_evidence_needed\": []\n}"
+      }
     }
   ],
   "usage": {
-    "prompt_tokens": 1200,
-    "completion_tokens": 180,
-    "total_tokens": 1380
+    "prompt_tokens": 1263,
+    "completion_tokens": 183,
+    "total_tokens": 2073,
+    "prompt_tokens_details": {
+      "text_tokens": 1263,
+      "audio_tokens": 0,
+      "image_tokens": 0,
+      "cached_tokens": 128
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 627,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    },
+    "num_sources_used": 0,
+    "cost_in_usd_ticks": 34693500
   }
 }
