@@ -1,0 +1,36 @@
+id: hitl-upgrade-inbox-rule-treasury-leave-v3
+title: "External forwarding rule created: vanessa.yeo"
+splunk_rule_name: "Cloud - Inbox Rule Forwarding to External Address - Rule"
+splunk_severity: medium
+outcome_class: hitl_upgrade
+assessed_severity: high
+weight: 0.7
+mitre_techniques: [T1114.003, T1020]
+entities:
+  user: {ref: "user:vanessa.yeo"}
+  ws: {ref: "host:WS-EXE-010"}
+alert:
+  title: "Inbox rule forwards matching mail to external address: ${user.id}"
+  description: "New-InboxRule 'sync' on ${user.id} forwards messages with subject containing 'Kite' or 'term sheet' to vy.personal@mailbox.example.net."
+  fields: {user: "${user.id}", src: "${ws.id}", src_ip: 10.30.1.30, recipient: "vy.personal@mailbox.example.net", rule_name: "sync", action: created}
+evidence:
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: 0
+    fields: {Operation: New-InboxRule, UserId: "${user.id}@kestrelgate.example", ClientIP: 10.30.1.30, Name: sync, SubjectContainsWords: "Kite;term sheet",
+             ForwardTo: "vy.personal@mailbox.example.net", ClientInfoString: "Client=MSExchangeRPC; Outlook"}
+  - source: email
+    sourcetype: "pps_messagelog"
+    offset_s: 420
+    fields: {sender: "${user.id}@kestrelgate.example", recipient: "vy.personal@mailbox.example.net", subject: "FW: Kite - revised term sheet v4", attachment: "Kite_TS_v4.pdf", attachment_bytes: 812331, final_action: delivered}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -6000
+    fields: {eventType: "user.session.start", actor: "${user.id}", outcome: SUCCESS, client_ip: 10.30.1.30, geo_country: SG, device: "${ws.id}", managed_device: true}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: -3000
+    fields: {Operation: MailItemsAccessed, UserId: "${user.id}@kestrelgate.example", MailboxOwnerUPN: "ceo@kestrelgate.example", LogonType: Delegate, OperationCount: 58}
+analyst_knowledge:
+  - fact: "The CEO is in confidential acquisition talks codenamed Kite. Only six named insiders are cleared, and Vanessa is on the insider list solely to manage the diary, not documents."
+    effect_on_decision: "Forwarding Kite term sheets to a personal mailbox is a market-sensitive leak. Escalate to high, remove the rule, and notify Legal and Compliance for the insider-list breach."

@@ -1,0 +1,48 @@
+id: hitl-upgrade-oauth-consent-cfo-delegate
+title: "User consented to unverified OAuth app: rachel.goh"
+splunk_rule_name: "Cloud - New OAuth Application Consent Granted - Rule"
+splunk_severity: low
+outcome_class: hitl_upgrade
+assessed_severity: high
+weight: 0.7
+demo_slot: 3
+mitre_techniques: [T1528, T1566.002, T1550.001]
+entities:
+  user: {ref: "user:rachel.goh"}
+  laptop: {ref: "host:LT-EXE-002"}
+alert:
+  title: "OAuth consent: ${user.id} granted 'DocuSafe Viewer' Mail.ReadWrite and Files.Read.All"
+  description: "${user.id} consented to multi-tenant app 'DocuSafe Viewer' (unverified publisher) with Mail.ReadWrite, Files.Read.All and offline_access."
+  fields:
+    user: ${user.id}
+    src_ip: 10.30.1.12
+    app: "DocuSafe Viewer"
+    app_id: "6b1f2c3d-9a8e-4f7b-a1c2-d3e4f5a6b7c8"
+    permissions: "Mail.ReadWrite Files.Read.All offline_access User.Read"
+    action: consent
+evidence:
+  - source: email
+    sourcetype: "pps_messagelog"
+    offset_s: -380
+    fields: {sender: "share@docusafe-viewer.example.com", recipient: "${user.id}@kestrelgate.example", subject: "Board pack Q4 - shared securely with you",
+             url: "https://docusafe-viewer.example.com/open?d=bp-q4", final_action: delivered, phish_score: 22, spf: pass, dkim: pass}
+  - source: proxy
+    sourcetype: "zscaler:web"
+    offset_s: -95
+    fields: {client: "${laptop.id}", user: "${user.id}", method: GET, url: "https://docusafe-viewer.example.com/open?d=bp-q4", category: "Business and Economy", action: Allowed, first_seen_domain: true, bytes_in: 31210}
+  - source: cloud
+    sourcetype: "azure:aad:audit"
+    offset_s: 0
+    fields: {activityDisplayName: "Consent to application", initiatedBy: "${user.id}@kestrelgate.example", target: "DocuSafe Viewer",
+             publisherVerified: false, ConsentType: Principal, replyUrl: "https://docusafe-viewer.example.com/auth/callback"}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: 150
+    fields: {Operation: MailItemsAccessed, UserId: "${user.id}@kestrelgate.example", AppId: "6b1f2c3d-9a8e-4f7b-a1c2-d3e4f5a6b7c8", ClientIPAddress: 192.0.2.211, OperationCount: 37, AccessType: Sync}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -7200
+    fields: {eventType: "user.session.start", actor: "${user.id}", outcome: SUCCESS, client_ip: 10.30.1.12, geo_country: SG, authenticator: "Okta Verify push"}
+analyst_knowledge:
+  - fact: "Rachel holds FullAccess and SendAs delegation on the CFO's mailbox and calendar, so an app with her Mail.ReadWrite token can read and send as the CFO."
+    effect_on_decision: "This is a CFO mailbox compromise, not a low-risk consent. Escalate to high, revoke the grant and refresh tokens, and review CFO mail access from the app ID."

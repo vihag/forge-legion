@@ -1,0 +1,50 @@
+id: hitl-downgrade-kerberoast-red-team
+title: "Kerberoasting: RC4 service tickets for 38 SPNs"
+splunk_rule_name: "Access - Kerberoasting Activity Detected - Rule"
+splunk_severity: high
+outcome_class: hitl_downgrade
+assessed_severity: low
+weight: 0.7
+demo_slot: 5
+mitre_techniques: [T1558.003, T1087.002]
+entities:
+  user: {ref: "user:c.okafor"}
+  ws: {ref: "host:WS-SEC-031"}
+  dc: {ref: "host:DC-01"}
+alert:
+  title: "Kerberoasting from ${ws.id}: ${user.id} requested RC4 tickets for 38 SPNs in 90 s"
+  description: "${dc.id} issued 38 TGS tickets with encryption type 0x17 (RC4) to ${user.id} from 10.30.9.31 (${ws.id})."
+  fields:
+    user: ${user.id}
+    src: ${ws.id}
+    src_ip: 10.30.9.31
+    dest: ${dc.id}
+    ticket_encryption: "0x17"
+    spn_count: 38
+    signature_id: 4769
+evidence:
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -90
+    fields: {EventCode: 4769, Computer: "${dc.id}", TargetUserName: "${user.id}@CORP.KESTRELGATE.EXAMPLE", IpAddress: "::ffff:10.30.9.31", TicketEncryptionType: "0x17",
+             ServiceName_count: 38, sample_services: "MSSQLSvc/FIN-DB-01.corp.kestrelgate.example:1433, HTTP/APP-CRM-01, svc-admin-sql"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -95
+    fields: {host: "${ws.id}", event_simpleName: ProcessRollup2, user: "${user.id}", image: "C:\\Users\\c.okafor\\Tools\\rbs.exe", cmdline: "rbs.exe kerberoast /rc4opsec /outfile:h.txt",
+             parent: powershell.exe, signature_valid: false}
+  - source: edr
+    sourcetype: "crowdstrike:events:detection"
+    offset_s: -80
+    fields: {host: "${ws.id}", tactic: "Credential Access", technique: "Kerberoasting", severity: High, PatternDisposition: "Detect only (sensor in audit mode for group SEC-ASSURANCE)"}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -7300
+    fields: {EventCode: 4624, Computer: "${ws.id}", TargetUserName: "${user.id}", LogonType: 2, IpAddress: "127.0.0.1"}
+  - source: firewall
+    sourcetype: "pan:traffic"
+    offset_s: -3400
+    fields: {src_ip: 10.30.9.31, dest_port: 445, distinct_dest: 12, app: ms-ds-smb, action: allow, rule: "INTERNAL-SMB"}
+analyst_knowledge:
+  - fact: "A sanctioned red-team engagement (RT-Q4, run by Bastion Assurance) is live this fortnight. Its signed rules of engagement name WS-SEC-031 and contractor account c.okafor as the source and list Kerberoasting as in scope."
+    effect_on_decision: "Downgrade to authorised testing and do not contain, which would burn the engagement. Confirm with the engagement lead out of band and tag the case RT-Q4 for the purple-team readout."

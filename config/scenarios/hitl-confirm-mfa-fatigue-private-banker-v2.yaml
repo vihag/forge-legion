@@ -1,0 +1,40 @@
+id: hitl-confirm-mfa-fatigue-private-banker-v2
+title: "MFA push flood followed by approval: natalie.chen"
+splunk_rule_name: "Identity - MFA Push Flood Followed by Approval - Rule"
+splunk_severity: high
+outcome_class: hitl_downgrade
+assessed_severity: low
+weight: 0.7
+mitre_techniques: [T1621]
+entities:
+  user: {ref: "user:natalie.chen"}
+  laptop: {ref: "host:LT-MKT-007"}
+alert:
+  title: "MFA push flood then approval for ${user.id} from 192.0.2.66 (JP)"
+  description: "9 Okta Verify pushes unanswered or denied in 6 minutes, then one approved from a newly enrolled device. Session from 192.0.2.66 (JP)."
+  fields: {user: "${user.id}", src_ip: 192.0.2.66, src_country: JP, app: "Okta Verify push", denied_count: 9, action: success}
+evidence:
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -380
+    fields: {eventType: "user.authentication.auth_via_mfa", actor: "${user.id}", outcome: FAILURE, reason: "OKTA_VERIFY_PUSH_TIMEOUT", client_ip: 192.0.2.66, geo_country: JP,
+             count: 9, device_token: "dt-5a0e71bc", managed_device: true, user_agent: "Safari/18.1 macOS"}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -60
+    fields: {eventType: "system.mfa.factor.activate", actor: "${user.id}", outcome: SUCCESS, client_ip: 192.0.2.66, factor: "Okta Verify (new device: iPhone 16)", enrolled_via: "service desk temporary access code"}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -4
+    fields: {eventType: "user.authentication.auth_via_mfa", actor: "${user.id}", outcome: SUCCESS, client_ip: 192.0.2.66, geo_country: JP, device_token: "dt-5a0e71bc", first_seen_country: true}
+  - source: vpn
+    sourcetype: "pan:globalprotect"
+    offset_s: 30
+    fields: {event: gateway-connected, user: "${user.id}", host: "${laptop.id}", public_ip: 192.0.2.66, src_country: JP, hip_match: "KG-Corp-Compliant", machine_cert: valid}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: 200
+    fields: {Operation: MailItemsAccessed, UserId: "${user.id}@kestrelgate.example", ClientIPAddress: 10.20.6.12, ClientInfoString: "Client=MSExchangeRPC; Outlook", OperationCount: 22}
+analyst_knowledge:
+  - fact: "Natalie is at a marketing summit in Tokyo. She replaced her phone at the airport, and the service desk issued her a temporary access code to re-enrol (SD-88340), so the ignored pushes went to her old handset."
+    effect_on_decision: "The prompt storm is her own sign-in retrying against a dead phone, from her compliant laptop. Downgrade to benign, and have the service desk remove the stale factor."

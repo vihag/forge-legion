@@ -1,0 +1,42 @@
+# Variant of the hero: same alert family, different admin; here the human knowledge explains it (downgrade).
+id: spl-2026-0001-hero-v2
+title: "Privileged account login from new country: adm.jwong"
+splunk_rule_name: "Access - Privileged Account Login From New Country - Rule"
+splunk_severity: high
+outcome_class: hitl_downgrade
+assessed_severity: low
+weight: 0.7
+mitre_techniques: [T1078, T1021.004]
+entities:
+  user: {ref: "user:adm.jwong"}
+  vpn: {ref: "host:VPN-GW-01"}
+  jump: {ref: "host:JMP-01"}
+alert:
+  title: "Privileged account login from new country: ${user.id}"
+  description: "Network admin ${user.id} authenticated via ${vpn.id} from TR (203.0.113.118); account baseline is SG."
+  fields: {user: "${user.id}", src_ip: 203.0.113.118, src_country: TR, hosts: ["${vpn.id}", "${jump.id}"], action: success, app: GlobalProtect}
+evidence:
+  - source: vpn
+    sourcetype: "pan:globalprotect"
+    offset_s: -12
+    fields: {result: success, user: "${user.id}", src_ip: 203.0.113.118, src_country: TR, mfa: approved, mfa_method: push, first_seen_country: true,
+             target: "${vpn.id}", vpn_ip: 10.20.2.71, hip_match: "KG-Corp-Compliant", machine_cert: valid, asn_org: "Example Hotels TR"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 95
+    fields: {host: "${jump.id}", event: logon, logon_type: 10, user: "${user.id}", src_ip: 10.20.2.71}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 240
+    fields: {host: "${jump.id}", event: process, image: putty.exe, cmdline: "putty.exe -ssh adm.jwong@CORE-SW-01", parent: explorer.exe}
+  - source: firewall
+    sourcetype: "pan:traffic"
+    offset_s: 241
+    fields: {src_ip: 10.10.5.21, dest_host: CORE-SW-01, dest_port: 22, app: ssh, rule: "PAM-TO-NETMGMT", action: allow}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -900
+    fields: {eventType: "user.session.start", actor: jason.wong, outcome: SUCCESS, client_ip: 203.0.113.118, geo_country: TR, authenticator: "Okta Verify number challenge"}
+analyst_knowledge:
+  - fact: "Jason Wong is in Istanbul for the network vendor's certification bootcamp (HR TRV-4502) and is the named implementer for tonight's core-switch firmware change CHG-30461."
+    effect_on_decision: "Login from TR on a compliant corporate laptop, through JMP-01 to the core switches, is expected. Downgrade to benign and close with references to TRV-4502 and CHG-30461."

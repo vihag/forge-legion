@@ -1,0 +1,44 @@
+id: auto-benign-vpn-roaming-travel
+title: "Geographically improbable access: ${user.id}"
+splunk_rule_name: "Access - Geographically Improbable Access Detected - Rule"
+splunk_severity: medium
+outcome_class: auto_benign
+weight: 3.5
+demo_slot: 4
+mitre_techniques: [T1078]
+entities:
+  user: {pick: {kind: user, where: {pool: routine, dept: wealth-management}}}
+  laptop: {pick: {kind: host, where: {pool: routine, role: laptop, dept: wealth-management}}}
+alert:
+  title: "Geographically improbable access: ${user.id} (SG -> MY in 38 min)"
+  description: "${user.id} authenticated from SG (198.51.100.77) and 38 minutes later from MY (192.0.2.140), 1,520 km/h implied speed."
+  fields:
+    user: ${user.id}
+    src_ip: 192.0.2.140
+    src_country: MY
+    prior_src_ip: 198.51.100.77
+    prior_src_country: SG
+    speed_kmh: 1520
+    app: GlobalProtect
+    action: success
+evidence:
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -2290
+    fields: {eventType: "user.session.start", actor: "${user.id}", outcome: SUCCESS, client_ip: 198.51.100.77, geo_country: SG,
+             asn_org: "Example Mobile SG (roaming gateway)", user_agent: "Okta Verify/9.24 iOS 18.1", device_token: "dt-7f1c22a9",
+             authenticator: "Okta Verify number challenge"}
+  - source: vpn
+    sourcetype: "pan:globalprotect"
+    offset_s: -4
+    fields: {event: gateway-connected, user: "${user.id}", host: "${laptop.id}", public_ip: 192.0.2.140, src_country: MY, private_ip: 10.20.3.88,
+             hip_match: "KG-Corp-Compliant", client_version: "6.2.4", machine_cert: valid}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -30
+    fields: {eventType: "user.authentication.auth_via_mfa", actor: "${user.id}", outcome: SUCCESS, client_ip: 192.0.2.140, geo_country: MY,
+             device_token: "dt-7f1c22a9", authenticator: "Okta Verify number challenge", managed_device: true}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: 300
+    fields: {Operation: MailItemsAccessed, UserId: "${user.id}@kestrelgate.example", ClientIPAddress: 10.20.3.88, ClientInfoString: "Client=MSExchangeRPC; Outlook", OperationCount: 14}

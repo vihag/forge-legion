@@ -1,0 +1,92 @@
+# Scripted 12-minute panel demo. Times are seconds after stream start; no wall-clock times.
+version: 1
+name: panel-demo-12min
+duration_s: 720
+seed: 42
+notes:
+- 36 alerts in 12 min (3/min). 5 HITL (14%), 4 of them in the first 4.5 min so LEGION (5-7 min/case) closes 2 on stage.
+- Auto entries reuse scenario files; pick-based entities draw new users/hosts per firing from the seed, and -v2 files change values.
+- Engine today only supports one firing per scenario at an integer demo_slot; this file is the at_s-level script the engine should play (see README).
+events:
+- at_s: 5
+  scenario: auto-fp-vuln-scanner-sweep
+- at_s: 25
+  scenario: auto-benign-sccm-client-push
+- at_s: 45
+  scenario: spl-2026-0001-hero
+  hitl: true
+  note: 'hero: privileged login RO -> JMP-01 -> FIN-DB-01 -> 48 MB to dl.example.net (medium->high)'
+- at_s: 65
+  scenario: auto-benign-scheduled-task-onedrive-v2
+- at_s: 85
+  scenario: auto-fp-password-typo-lockout
+- at_s: 110
+  scenario: hitl-confirm-mfa-fatigue-private-banker
+  hitl: true
+  note: MFA fatigue; SIM confirms with service-desk call
+- at_s: 130
+  scenario: auto-benign-av-quarantine-download
+- at_s: 150
+  scenario: auto-benign-vpn-roaming-travel
+- at_s: 170
+  scenario: auto-fp-dns-edr-telemetry-entropy
+- at_s: 190
+  scenario: hitl-upgrade-oauth-consent-cfo-delegate
+  hitl: true
+  note: low->high uplift; SIM knows the EA has delegate rights on the CFO mailbox
+- at_s: 210
+  scenario: auto-benign-phish-reported-zapped
+- at_s: 230
+  scenario: auto-benign-sanctioned-offsite-backup
+- at_s: 250
+  scenario: auto-fp-intune-encoded-powershell
+- at_s: 270
+  scenario: hitl-downgrade-kerberoast-red-team
+  hitl: true
+  note: bots over-escalate; SIM knows red team RT-Q4 is in scope (downgrade, no containment)
+- at_s: 290
+  scenario: auto-benign-okta-spray-blocked
+- at_s: 310
+  scenario: auto-benign-sccm-remote-control
+- at_s: 335
+  scenario: auto-fp-vuln-scanner-sweep-v2
+- at_s: 360
+  scenario: auto-benign-sccm-client-push-v2
+- at_s: 385
+  scenario: auto-fp-password-typo-lockout-v2
+- at_s: 410
+  scenario: auto-benign-vpn-roaming-travel-v2
+- at_s: 435
+  scenario: auto-benign-av-quarantine-download-v2
+- at_s: 460
+  scenario: auto-fp-dns-edr-telemetry-entropy-v2
+- at_s: 480
+  scenario: hitl-upgrade-resigned-rm-bulk-download
+  hitl: true
+  note: medium->high; queues behind LEGION as the 'human backlog' story
+- at_s: 505
+  scenario: auto-benign-phish-reported-zapped-v2
+- at_s: 525
+  scenario: auto-benign-scheduled-task-onedrive
+- at_s: 545
+  scenario: auto-fp-intune-encoded-powershell-v2
+- at_s: 570
+  scenario: auto-benign-okta-spray-blocked-v2
+- at_s: 590
+  scenario: auto-benign-sccm-remote-control-v2
+- at_s: 610
+  scenario: auto-benign-sanctioned-offsite-backup-v2
+- at_s: 630
+  scenario: auto-fp-vuln-scanner-sweep
+- at_s: 650
+  scenario: auto-fp-password-typo-lockout
+- at_s: 665
+  scenario: auto-benign-sccm-client-push
+- at_s: 680
+  scenario: auto-benign-scheduled-task-onedrive-v2
+- at_s: 695
+  scenario: auto-fp-dns-edr-telemetry-entropy
+- at_s: 705
+  scenario: auto-benign-phish-reported-zapped
+- at_s: 715
+  scenario: auto-fp-intune-encoded-powershell

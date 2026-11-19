@@ -1,0 +1,42 @@
+id: hitl-confirm-shadow-copy-deletion-fs02-v2
+title: "Shadow copy deletion on FS-HR-01"
+splunk_rule_name: "Endpoint - Shadow Copy Deletion via Vssadmin or WMIC - Rule"
+splunk_severity: high
+outcome_class: hitl_downgrade
+assessed_severity: low
+weight: 0.7
+mitre_techniques: [T1490]
+entities:
+  user: {ref: "user:aaron.lim"}
+  fs: {ref: "host:FS-HR-01"}
+  jump: {ref: "host:JMP-01"}
+alert:
+  title: "Shadow copy deletion on ${fs.id} by ${user.id}"
+  description: "vssadmin.exe delete shadows /for=E: /oldest ran 14 times on ${fs.id} from a PowerShell script. EDR killed the process."
+  fields: {user: "${user.id}", src: "${jump.id}", dest: "${fs.id}", process: vssadmin.exe, process_cmdline: "vssadmin.exe delete shadows /for=E: /oldest /quiet", count: 14, action: blocked}
+evidence:
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -720
+    fields: {EventCode: 4624, Computer: "${fs.id}", TargetUserName: "${user.id}", LogonType: 10, IpAddress: 10.10.5.21, WorkstationName: "${jump.id}"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -300
+    fields: {host: "${fs.id}", event_simpleName: ProcessRollup2, user: "${user.id}", image: powershell.exe,
+             cmdline: "powershell.exe -File D:\\Ops\\Cleanup-Snapshots.ps1 -Volume E: -KeepNewest 3", parent: explorer.exe}
+  - source: edr
+    sourcetype: "crowdstrike:events:detection"
+    offset_s: 0
+    fields: {host: "${fs.id}", user: "${user.id}", image: vssadmin.exe, cmdline: "vssadmin.exe delete shadows /for=E: /oldest /quiet", tactic: Impact,
+             technique: "Inhibit System Recovery", severity: High, PatternDisposition: "Process Killed", count: 14}
+  - source: edr
+    sourcetype: "WinEventLog:System"
+    offset_s: -310
+    fields: {Computer: "${fs.id}", SourceName: volsnap, EventCode: 36, Message: "The shadow copies of volume E: were aborted because the shadow copy storage could not grow due to a user imposed limit."}
+  - source: firewall
+    sourcetype: "pan:traffic"
+    offset_s: -600
+    fields: {src_host: "${fs.id}", dest_port: 445, distinct_dest: 2, app: ms-ds-smb, action: allow, rule: "INTERNAL-SMB"}
+analyst_knowledge:
+  - fact: "Change CHG-30455 has Aaron Lim reclaiming VSS storage on FS-HR-01 ahead of this week's storage migration, using the Cleanup-Snapshots.ps1 script attached to the change."
+    effect_on_decision: "Downgrade to an authorised change. Ask Aaron to re-run with an EDR exclusion scoped to the change window rather than leave the process-kill in place."

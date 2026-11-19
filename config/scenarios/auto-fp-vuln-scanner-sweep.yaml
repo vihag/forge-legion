@@ -1,0 +1,49 @@
+id: auto-fp-vuln-scanner-sweep
+title: "Port sweep from internal host against ${target.id}"
+splunk_rule_name: "Network - Vulnerability Scanner Detection (by targets) - Rule"
+splunk_severity: low
+outcome_class: auto_fp
+weight: 4.5
+demo_slot: 0
+mitre_techniques: [T1046]
+entities:
+  scanner: {pick: {kind: host, where: {pool: routine, role: vulnerability-scanner}}}
+  svc: {pick: {kind: user, where: {pool: routine, title: "Service account (Tenable scan)"}}}
+  target: {pick: {kind: host, where: {pool: routine, role: workstation}}}
+alert:
+  title: "Port sweep from ${scanner.id} against ${target.id}"
+  description: "${scanner.id} touched 1,043 distinct TCP ports on ${target.id} within 5 minutes."
+  fields:
+    src: ${scanner.id}
+    src_zone: trust-servers
+    dest: ${target.id}
+    user: ${svc.id}
+    dest_port_count: 1043
+    signature: "TCP port sweep"
+    action: allowed
+    count: 1043
+evidence:
+  - source: firewall
+    sourcetype: "pan:traffic"
+    offset_s: -280
+    fields: {src_host: "${scanner.id}", src_zone: trust-servers, dest_host: "${target.id}", dest_zone: trust-users, app: incomplete,
+             dest_port_range: "1-1024,3389,5985,8443", sessions: 1043, action: allow, rule: "SCANNER-TO-ALL", session_end_reason: tcp-rst-from-server}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -240
+    fields: {EventCode: 4624, Computer: "${target.id}", TargetUserName: "${svc.id}", LogonType: 3, WorkstationName: "${scanner.id}",
+             AuthenticationPackageName: NTLM, LmPackageName: "NTLM V2"}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -238
+    fields: {EventCode: 5145, Computer: "${target.id}", SubjectUserName: "${svc.id}", ShareName: "\\\\*\\ADMIN$", RelativeTargetName: "nessus_reg_check.txt",
+             AccessMask: "0x2"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -300
+    fields: {host: "${scanner.id}", event_simpleName: ProcessRollup2, image: "/opt/nessus/sbin/nessusd", parent: systemd, user: root,
+             cmdline: "/opt/nessus/sbin/nessusd -q", signed: true}
+  - source: dns
+    sourcetype: "infoblox:dns"
+    offset_s: -301
+    fields: {src_host: "${scanner.id}", query: "${target.id}.corp.kestrelgate.example", query_type: A, reply_code: NOERROR}

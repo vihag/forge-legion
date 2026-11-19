@@ -1,0 +1,46 @@
+id: auto-benign-sanctioned-offsite-backup
+title: "Large outbound transfer from ${host.id}"
+splunk_rule_name: "Network - Unusually Large Outbound Data Transfer - Rule"
+splunk_severity: medium
+outcome_class: auto_benign
+weight: 3
+demo_slot: 6
+mitre_techniques: [T1048]
+entities:
+  host: {pick: {kind: host, where: {pool: routine, role: backup-media-server}}}
+  svc: {pick: {kind: user, where: {pool: routine, title: "Service account (offsite backup)"}}}
+alert:
+  title: "Large outbound transfer from ${host.id} to backup.finvault.example"
+  description: "${host.id} sent 6.2 GB to 203.0.113.80:443 in 18 minutes, 4.1x its 30-day hourly median."
+  fields:
+    src: ${host.id}
+    src_zone: trust-servers
+    dest_ip: 203.0.113.80
+    dest_host: backup.finvault.example
+    user: ${svc.id}
+    bytes_out: 6657199308
+    app: ssl
+    action: allowed
+evidence:
+  - source: firewall
+    sourcetype: "pan:traffic"
+    offset_s: -1080
+    fields: {src_host: "${host.id}", dest_ip: 203.0.113.80, dest_port: 443, app: ssl, rule: "BACKUP-TO-FINVAULT", action: allow,
+             bytes_sent: 6657199308, bytes_received: 21733120, session_end_reason: tcp-fin, duration_s: 1074}
+  - source: dns
+    sourcetype: "infoblox:dns"
+    offset_s: -1085
+    fields: {src_host: "${host.id}", query: backup.finvault.example, query_type: A, answer: 203.0.113.80, reply_code: NOERROR}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -1090
+    fields: {host: "${host.id}", event_simpleName: ProcessRollup2, image: "C:\\Program Files\\FinVault\\Agent\\FinVaultAgent.exe", parent: services.exe,
+             user: "${svc.id}", cmdline: "FinVaultAgent.exe --job FS-Incremental-Hourly --target backup.finvault.example", signer: "FinVault Pte Ltd (example)", signature_valid: true}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -1092
+    fields: {EventCode: 4624, Computer: "${host.id}", TargetUserName: "${svc.id}", LogonType: 5}
+  - source: firewall
+    sourcetype: "pan:traffic"
+    offset_s: -3600
+    fields: {src_host: "${host.id}", dest_ip: 203.0.113.80, dest_port: 443, app: ssl, rule: "BACKUP-TO-FINVAULT", action: allow, bytes_sent: 1488977000, duration_s: 412}

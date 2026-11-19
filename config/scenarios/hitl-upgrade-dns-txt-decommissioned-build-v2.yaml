@@ -1,0 +1,34 @@
+id: hitl-upgrade-dns-txt-decommissioned-build-v2
+title: "External DNS lookups from SWIFT-GW-01"
+splunk_rule_name: "Network - DNS Query to Newly Observed Domain - Rule"
+splunk_severity: low
+outcome_class: hitl_upgrade
+assessed_severity: high
+weight: 0.7
+mitre_techniques: [T1071.004, T1568]
+entities:
+  host: {ref: "host:SWIFT-GW-01"}
+alert:
+  title: "${host.id} queried newly observed domain update-check.example.org"
+  description: "${host.id} (10.10.9.11) resolved update-check.example.org 6 times in 2 hours; the domain was first seen in the environment today."
+  fields: {src: "${host.id}", src_ip: 10.10.9.11, query: update-check.example.org, query_type: A, count: 6}
+evidence:
+  - source: dns
+    sourcetype: "infoblox:dns"
+    offset_s: -7000
+    fields: {src_ip: 10.10.9.11, query: update-check.example.org, query_type: A, count: 6, answer: 203.0.113.207, reply_code: NOERROR, first_seen: true}
+  - source: firewall
+    sourcetype: "pan:traffic"
+    offset_s: -6990
+    fields: {src_ip: 10.10.9.11, dest_ip: 203.0.113.207, dest_port: 443, app: ssl, action: deny, rule: "SWIFT-ZONE-DEFAULT-DENY", count: 6}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -7005
+    fields: {host: "${host.id}", event_simpleName: DnsRequest, ContextProcess: "C:\\ProgramData\\Microsoft\\Crypto\\wuauctl.exe", DomainName: update-check.example.org, signature_valid: false}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -90000
+    fields: {host: "${host.id}", event_simpleName: NewExecutableWritten, file_path: "C:\\ProgramData\\Microsoft\\Crypto\\wuauctl.exe", size_bytes: 214528}
+analyst_knowledge:
+  - fact: "SWIFT-GW-01 sits in the SWIFT secure zone, which must never resolve internet names (SWIFT CSP control 1.1). Its resolver forwarding was meant to be blocked; this lookup shows that block is missing."
+    effect_on_decision: "Any external lookup from the gateway is a zone breach, and the unsigned binary makes it a likely implant. Escalate to high, isolate under the SWIFT incident playbook and notify Treasury ops."

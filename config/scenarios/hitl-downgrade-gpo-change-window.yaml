@@ -1,0 +1,49 @@
+id: hitl-downgrade-gpo-change-window
+title: "GPO immediate scheduled task deployed from DC-01"
+splunk_rule_name: "Change - Group Policy Immediate Scheduled Task Deployed - Rule"
+splunk_severity: critical
+outcome_class: hitl_downgrade
+assessed_severity: low
+weight: 0.7
+mitre_techniques: [T1484.001, T1053.005]
+entities:
+  user: {ref: "user:da-ehalim"}
+  dc: {ref: "host:DC-01"}
+  jump: {ref: "host:JMP-01"}
+alert:
+  title: "GPO 'Server Baseline' gained an immediate scheduled task, edited by ${user.id} on ${dc.id}"
+  description: "${user.id} added an ImmediateTask to GPO 'Server Baseline' (linked to OU=Servers, 118 computers) that runs a PowerShell script from SYSVOL as SYSTEM."
+  fields:
+    user: ${user.id}
+    src: ${jump.id}
+    dest: ${dc.id}
+    gpo: "Server Baseline {6AC1786C-016F-11D2-945F-00C04FB984F9}"
+    affected_computers: 118
+    signature_id: 5136
+evidence:
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -480
+    fields: {EventCode: 4624, Computer: "${dc.id}", TargetUserName: "${user.id}", LogonType: 10, IpAddress: 10.10.5.21, WorkstationName: "${jump.id}"}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -30
+    fields: {EventCode: 5136, Computer: "${dc.id}", SubjectUserName: "${user.id}", ObjectDN: "CN={6AC1786C-016F-11D2-945F-00C04FB984F9},CN=Policies,CN=System,DC=corp,DC=kestrelgate,DC=example",
+             AttributeLDAPDisplayName: gPCMachineExtensionNames, OperationType: "Value Added"}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -28
+    fields: {EventCode: 5145, Computer: "${dc.id}", SubjectUserName: "${user.id}", ShareName: "\\\\*\\SYSVOL",
+             RelativeTargetName: "corp.kestrelgate.example\\Policies\\{6AC1786C-...}\\Machine\\Preferences\\ScheduledTasks\\ScheduledTasks.xml", AccessMask: "0x2"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 240
+    fields: {host: APP-CRM-01, event_simpleName: ProcessRollup2, user: SYSTEM, image: powershell.exe, parent: svchost.exe,
+             cmdline: "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \\\\corp.kestrelgate.example\\SYSVOL\\corp.kestrelgate.example\\scripts\\Deploy-IntermediateCA.ps1", hosts_seen: 74}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 252
+    fields: {host: APP-CRM-01, event_simpleName: ProcessRollup2, user: SYSTEM, image: certutil.exe, cmdline: "certutil.exe -addstore CA \\\\corp.kestrelgate.example\\SYSVOL\\...\\KG-Issuing-CA-02.cer", parent: powershell.exe}
+analyst_knowledge:
+  - fact: "Emergency change CHG-30418 is CAB-approved, with Emily Halim as implementer. It pushes the renewed KG-Issuing-CA-02 intermediate certificate to all servers via a GPO immediate task, and its window is open now until 23:00 SGT."
+    effect_on_decision: "Downgrade to an authorised change and close it, after checking the script hash against the one attached to CHG-30418 and confirming the task is removed once the window ends."

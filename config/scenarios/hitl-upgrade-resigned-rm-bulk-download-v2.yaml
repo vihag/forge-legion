@@ -1,0 +1,36 @@
+id: hitl-upgrade-resigned-rm-bulk-download-v2
+title: "Mass source code clone: nathan.goh"
+splunk_rule_name: "Insider - Mass Source Code Repository Clone - Rule"
+splunk_severity: high
+outcome_class: hitl_downgrade
+assessed_severity: low
+weight: 0.7
+mitre_techniques: [T1213.003]
+entities:
+  user: {ref: "user:nathan.goh"}
+  ws: {ref: "host:WS-ENG-044"}
+  build: {ref: "host:BLD-01"}
+alert:
+  title: "${user.id} cloned 41 repositories (4,212 files) in 18 minutes"
+  description: "${user.id} cloned 41 repositories from git.corp.kestrelgate.example to ${ws.id}, 27x his 30-day baseline."
+  fields: {user: "${user.id}", src: "${ws.id}", dest: git.corp.kestrelgate.example, repo_count: 41, file_count: 4212, action: clone}
+evidence:
+  - source: proxy
+    sourcetype: "zscaler:web"
+    offset_s: -1080
+    fields: {client: "${ws.id}", user: "${user.id}", method: POST, url: "https://git.corp.kestrelgate.example/payments/*.git/git-upload-pack", requests: 41, bytes_in: 1288490188, action: Allowed}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -1075
+    fields: {host: "${ws.id}", event_simpleName: ProcessRollup2, user: "${user.id}", image: git.exe, parent: pwsh.exe, cmdline: "git clone --mirror https://git.corp.kestrelgate.example/payments/ledger-core.git"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 300
+    fields: {host: "${ws.id}", event_simpleName: ProcessRollup2, user: "${user.id}", image: git.exe, cmdline: "git push --mirror https://git.corp.kestrelgate.example/data-platform/ledger-core.git"}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -4000
+    fields: {eventType: "group.user_membership.add", actor: "iam-automation", target: "${user.id}", group: "eng-data-platform"}
+analyst_knowledge:
+  - fact: "Nathan moved to the Data Platform team this month. Change CHG-30477 has him migrating the payments repositories into the data-platform org this week; the pushes go back to the internal git server."
+    effect_on_decision: "The clones are a sanctioned migration that never leaves the internal git server. Downgrade to benign and close with CHG-30477."

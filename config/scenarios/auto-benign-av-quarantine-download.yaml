@@ -1,0 +1,46 @@
+id: auto-benign-av-quarantine-download
+title: "Malicious file quarantined on ${laptop.id}"
+splunk_rule_name: "Malware - Malicious File Quarantined by EDR - Rule"
+splunk_severity: medium
+outcome_class: auto_benign
+weight: 3
+demo_slot: 3
+mitre_techniques: [T1204.002]
+entities:
+  user: {pick: {kind: user, where: {pool: routine, dept: sales}}}
+  laptop: {pick: {kind: host, where: {pool: routine, role: laptop, dept: sales}}}
+alert:
+  title: "Malicious file quarantined on ${laptop.id}"
+  description: "EDR quarantined Invoice_08317.pdf.exe on write in ${user.id}'s Downloads folder. No execution was recorded."
+  fields:
+    user: ${user.id}
+    dest: ${laptop.id}
+    file_name: "Invoice_08317.pdf.exe"
+    file_path: "C:\\Users\\${user.id}\\Downloads\\Invoice_08317.pdf.exe"
+    file_hash: "9f2c4e81b07a3d5c6e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d"
+    signature: "Trojan:Win32/AgentTesla!ml"
+    action: quarantined
+evidence:
+  - source: proxy
+    sourcetype: "zscaler:web"
+    offset_s: -9
+    fields: {client: "${laptop.id}", user: "${user.id}", method: GET, url: "https://quickfile-transfer.example.net/d/7Qx2Lm/Invoice_08317.pdf.exe",
+             category: "File Host", filetype: "Windows Executable", action: Allowed, threat_name: "None", bytes_in: 1183744}
+  - source: edr
+    sourcetype: "crowdstrike:events:detection"
+    offset_s: 0
+    fields: {host: "${laptop.id}", user: "${user.id}", event_simpleName: QuarantinedFile, file_name: "Invoice_08317.pdf.exe",
+             tactic: "Execution", technique: "User Execution", severity: Medium, PatternDisposition: "Quarantined, File Write Blocked", process_executed: false}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -12
+    fields: {host: "${laptop.id}", event_simpleName: ProcessRollup2, image: "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe", parent: explorer.exe, user: "${user.id}"}
+  - source: email
+    sourcetype: "pps_messagelog"
+    offset_s: -312
+    fields: {recipient: "${user.id}@kestrelgate.example", sender: "accounts@invoice-portal.example.com", subject: "Overdue invoice 08317 - final notice",
+             url_count: 1, final_action: delivered, spam_score: 41, phish_score: 38}
+  - source: dns
+    sourcetype: "infoblox:dns"
+    offset_s: 120
+    fields: {src_host: "${laptop.id}", query: "update.avcloud.example", query_type: A, reply_code: NOERROR}

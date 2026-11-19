@@ -1,0 +1,58 @@
+id: hitl-confirm-shadow-copy-deletion-fs02
+title: "Shadow copy deletion on FS-02"
+splunk_rule_name: "Endpoint - Shadow Copy Deletion via Vssadmin or WMIC - Rule"
+splunk_severity: high
+outcome_class: hitl_confirm
+assessed_severity: high
+weight: 0.7
+mitre_techniques: [T1490, T1021.001, T1087.002, T1135]
+entities:
+  user: {ref: "user:kevin.ong"}
+  src: {ref: "host:WS-ITS-007"}
+  fs: {ref: "host:FS-02"}
+alert:
+  title: "Shadow copy deletion on ${fs.id} by ${user.id}"
+  description: "vssadmin.exe delete shadows /all /quiet ran on ${fs.id} in an RDP session from ${src.id}. EDR killed the process."
+  fields:
+    user: ${user.id}
+    src: ${src.id}
+    dest: ${fs.id}
+    process: vssadmin.exe
+    process_cmdline: "vssadmin.exe delete shadows /all /quiet"
+    action: blocked
+evidence:
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -1260
+    fields: {EventCode: 4624, Computer: "${fs.id}", TargetUserName: "${user.id}", LogonType: 10, IpAddress: 10.30.7.7, WorkstationName: "${src.id}"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -1180
+    fields: {host: "${fs.id}", event_simpleName: ProcessRollup2, user: "${user.id}", image: "C:\\ProgramData\\Intel\\svchosts.exe", parent: explorer.exe, signature_valid: false,
+             sha256: "1d4f7c9a2b8e3f6a0c5d9e2b7a4f1c8e3d6b9a2f5c8e1d4a7b0c3f6e9d2a5b8c"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -950
+    fields: {host: "${fs.id}", event_simpleName: ProcessRollup2, user: "${user.id}", image: "C:\\ProgramData\\Intel\\AdFind.exe", cmdline: "AdFind.exe -f (objectcategory=computer) -csv name operatingSystem", parent: cmd.exe}
+  - source: firewall
+    sourcetype: "pan:traffic"
+    offset_s: -600
+    fields: {src_host: "${fs.id}", dest_port: 445, distinct_dest: 46, app: ms-ds-smb, action: allow, rule: "INTERNAL-SMB"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -40
+    fields: {host: "${fs.id}", event_simpleName: ProcessRollup2, user: "${user.id}", image: bcdedit.exe, cmdline: "bcdedit /set {default} recoveryenabled No", parent: cmd.exe}
+  - source: edr
+    sourcetype: "crowdstrike:events:detection"
+    offset_s: 0
+    fields: {host: "${fs.id}", user: "${user.id}", image: vssadmin.exe, cmdline: "vssadmin.exe delete shadows /all /quiet", tactic: Impact, technique: "Inhibit System Recovery",
+             severity: High, PatternDisposition: "Process Killed"}
+  - source: firewall
+    sourcetype: "pan:traffic"
+    offset_s: -1150
+    fields: {src_host: "${fs.id}", dest_ip: 192.0.2.77, dest_port: 443, app: ssl, bytes_sent: 88213, bytes_received: 1934021, rule: "SERVERS-OUTBOUND-WEB", action: allow}
+analyst_knowledge:
+  - fact: "FS-02 holds Treasury's SWIFT MT940 reconciliation exports, although the CMDB lists it as a generic file server. Confirmed impact on it is a MAS TRM notifiable incident, with a 1-hour notification clock."
+    effect_on_decision: "Confirm and escalate to a major incident under the IR retainer. Isolate FS-02 now rather than waiting for business hours."
+  - fact: "Kevin Ong's password was reset by phone yesterday for a caller who failed the callback check (SD-88190)."
+    effect_on_decision: "Treats kevin.ong as compromised since that reset. Widen scope to every host the account touched in the last 24 hours."

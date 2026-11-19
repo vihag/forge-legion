@@ -1,0 +1,41 @@
+id: hitl-confirm-findb-cardholder-export-v2
+title: "Bulk export from payments table on ETL-01"
+splunk_rule_name: "Database - Bulk Export From Sensitive Table via Interactive Session - Rule"
+splunk_severity: high
+outcome_class: hitl_confirm
+assessed_severity: high
+weight: 0.7
+mitre_techniques: [T1005, T1078.002]
+entities:
+  user: {ref: "user:svc-admin-etl"}
+  jump: {ref: "host:JMP-01"}
+  etl: {ref: "host:ETL-01"}
+alert:
+  title: "bcp bulk export of StagingDB.dbo.CardVault_Replica on ${etl.id} by ${user.id}"
+  description: "Interactive session as ${user.id} exported 1.9 million rows from CardVault_Replica with bcp to D:\\Exports."
+  fields: {user: "${user.id}", src: "${jump.id}", dest: "${etl.id}", process: bcp.exe, object: "StagingDB.dbo.CardVault_Replica", rows: 1904227}
+evidence:
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -1400
+    fields: {EventCode: 4624, Computer: "${etl.id}", TargetUserName: "${user.id}", LogonType: 10, IpAddress: 10.10.5.21, WorkstationName: "${jump.id}"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -3
+    fields: {host: "${etl.id}", event_simpleName: ProcessRollup2, user: "${user.id}", image: bcp.exe, parent: cmd.exe,
+             cmdline: "bcp StagingDB.dbo.CardVault_Replica out D:\\Exports\\cvr.dat -c -T -S localhost"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 95
+    fields: {host: "${etl.id}", event_simpleName: NewFileWritten, file_path: "D:\\Exports\\cvr.dat", size_bytes: 402653184}
+  - source: firewall
+    sourcetype: "pan:traffic"
+    offset_s: 400
+    fields: {src_host: "${etl.id}", dest_host: "${jump.id}", dest_port: 445, app: ms-ds-smb, bytes_sent: 402901120, rule: "PAM-FILE-TRANSFER", action: allow}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -43000
+    fields: {EventCode: 4624, Computer: "${etl.id}", TargetUserName: "${user.id}", LogonType: 4, note: "batch logon for nightly ETL"}
+analyst_knowledge:
+  - fact: "The CardVault_Replica table on ETL-01 was meant to be purged by last quarter's tokenisation project, but the QSA pre-assessment (finding QSA-F-07) found it still holds clear PANs."
+    effect_on_decision: "This is clear cardholder data leaving its store through a batch-only account. Confirm at high, pull the copy back from JMP-01, and bring ETL-01 into incident scope."

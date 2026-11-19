@@ -1,0 +1,50 @@
+id: hitl-confirm-findb-cardholder-export
+title: "Bulk export from cardholder table on FIN-DB-01"
+splunk_rule_name: "Database - Bulk Export From Sensitive Table via Interactive Session - Rule"
+splunk_severity: high
+outcome_class: hitl_confirm
+assessed_severity: high
+weight: 0.7
+mitre_techniques: [T1005, T1560.001, T1078.002]
+entities:
+  user: {ref: "user:svc-admin-sql"}
+  jump: {ref: "host:JMP-01"}
+  db: {ref: "host:FIN-DB-01"}
+alert:
+  title: "sqlcmd bulk export of PaymentsDB.dbo.CardVault on ${db.id} by ${user.id}"
+  description: "Interactive RDP session as ${user.id} ran sqlcmd against the CardVault table and wrote a 312 MB CSV to C:\\Windows\\Temp."
+  fields:
+    user: ${user.id}
+    src: ${jump.id}
+    dest: ${db.id}
+    process: sqlcmd.exe
+    object: "PaymentsDB.dbo.CardVault"
+    bytes: 327155712
+evidence:
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -610
+    fields: {EventCode: 4624, Computer: "${db.id}", TargetUserName: "${user.id}", LogonType: 10, IpAddress: 10.10.5.21, WorkstationName: "${jump.id}"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -2
+    fields: {host: "${db.id}", event_simpleName: ProcessRollup2, user: "${user.id}", image: sqlcmd.exe, parent: cmd.exe,
+             cmdline: "sqlcmd -S localhost -d PaymentsDB -Q \"SELECT * FROM dbo.CardVault\" -s , -o C:\\Windows\\Temp\\cv_exp.csv"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 180
+    fields: {host: "${db.id}", event_simpleName: ProcessRollup2, user: "${user.id}", image: "C:\\Program Files\\7-Zip\\7z.exe", parent: cmd.exe,
+             cmdline: "7z.exe a -p -mhe=on C:\\Windows\\Temp\\upd.7z C:\\Windows\\Temp\\cv_exp.csv"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 196
+    fields: {host: "${db.id}", event_simpleName: NewFileWritten, file_path: "C:\\Windows\\Temp\\upd.7z", size_bytes: 141033472}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -86000
+    fields: {EventCode: 4624, Computer: "${db.id}", TargetUserName: "${user.id}", LogonType: 5, note: "service logon for SQLSERVERAGENT"}
+analyst_knowledge:
+  - fact: "svc-admin-sql is only ever used by the SQL Agent job NightlyIndexMaint and is never used interactively. Its vaulted password has not been checked out by anyone this month."
+    effect_on_decision: "The interactive session is credential misuse, not a DBA at work. Confirm, disable the account and rotate it through PAM."
+  - fact: "FIN-DB-01 is in PCI DSS scope. Any access to cardholder data must be logged as incident PCI-IR-2611, and the acquirer must be notified within 24 hours."
+    effect_on_decision: "Confirm at high. Open PCI-IR-2611 alongside the SOAR containment and keep the staged archive for forensics."

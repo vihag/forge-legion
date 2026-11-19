@@ -1,0 +1,36 @@
+id: hitl-upgrade-oauth-consent-cfo-delegate-v2
+title: "User consented to unverified OAuth app: sophie.lim"
+splunk_rule_name: "Cloud - New OAuth Application Consent Granted - Rule"
+splunk_severity: medium
+outcome_class: hitl_confirm
+assessed_severity: medium
+weight: 0.7
+mitre_techniques: [T1528]
+entities:
+  user: {ref: "user:sophie.lim"}
+  laptop: {ref: "host:LT-LGL-002"}
+alert:
+  title: "OAuth consent: ${user.id} granted 'ContractLens' Files.Read.All"
+  description: "${user.id} consented to multi-tenant app 'ContractLens' (unverified publisher) with Files.Read.All, Sites.Read.All and offline_access."
+  fields: {user: "${user.id}", src_ip: 10.30.2.90, app: ContractLens, app_id: "0d4e8f21-7c3b-4a6e-9f12-5b8c7a6d4e3f", permissions: "Files.Read.All Sites.Read.All offline_access", action: consent}
+evidence:
+  - source: cloud
+    sourcetype: "azure:aad:audit"
+    offset_s: 0
+    fields: {activityDisplayName: "Consent to application", initiatedBy: "${user.id}@kestrelgate.example", target: ContractLens, publisherVerified: false, ConsentType: Principal,
+             replyUrl: "https://app.contractlens.example/oauth/callback"}
+  - source: proxy
+    sourcetype: "zscaler:web"
+    offset_s: -120
+    fields: {client: "${laptop.id}", user: "${user.id}", method: GET, url: "https://app.contractlens.example/onboarding/tenant", category: "Business and Economy", action: Allowed, first_seen_domain: true}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: 600
+    fields: {Operation: FileAccessed, UserId: "${user.id}@kestrelgate.example", AppId: "0d4e8f21-7c3b-4a6e-9f12-5b8c7a6d4e3f", SiteUrl: "/sites/Legal-Contracts", count: 312, ClientIP: 198.51.100.90}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -1800
+    fields: {eventType: "user.session.start", actor: "${user.id}", outcome: SUCCESS, client_ip: 10.30.2.90, geo_country: SG, managed_device: true}
+analyst_knowledge:
+  - fact: "ContractLens is the contract-review tool Legal procured last month (PO-77812). An admin-consent request is open with IAM but hasn't been actioned, which is why Sophie self-consented."
+    effect_on_decision: "Bots are right that a user consent with tenant-wide read is a medium-risk control gap, but this app is approved. Confirm at medium and close with a task to replace the user grant with a scoped admin consent."

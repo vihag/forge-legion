@@ -1,0 +1,35 @@
+id: hitl-upgrade-oauth-consent-cfo-delegate-v3
+title: "User consented to unverified OAuth app: hazel.ng"
+splunk_rule_name: "Cloud - New OAuth Application Consent Granted - Rule"
+splunk_severity: low
+outcome_class: hitl_upgrade
+assessed_severity: high
+weight: 0.7
+mitre_techniques: [T1528, T1530]
+entities:
+  user: {ref: "user:hazel.ng"}
+  ws: {ref: "host:WS-FIN-030"}
+alert:
+  title: "OAuth consent: ${user.id} granted 'PDF Merge Online' Files.Read.All"
+  description: "${user.id} consented to 'PDF Merge Online' (unverified publisher) with Files.Read.All and offline_access after a search-engine click."
+  fields: {user: "${user.id}", src: "${ws.id}", app: "PDF Merge Online", app_id: "a7c3e9f1-2b4d-4e6f-8a0c-1d3f5b7e9a2c", permissions: "Files.Read.All offline_access User.Read", action: consent}
+evidence:
+  - source: proxy
+    sourcetype: "zscaler:web"
+    offset_s: -75
+    fields: {client: "${ws.id}", user: "${user.id}", method: GET, url: "https://pdfmerge-online.example.com/merge?src=ad", category: "Online Tools", action: Allowed, first_seen_domain: true}
+  - source: cloud
+    sourcetype: "azure:aad:audit"
+    offset_s: 0
+    fields: {activityDisplayName: "Consent to application", initiatedBy: "${user.id}@kestrelgate.example", target: "PDF Merge Online", publisherVerified: false, ConsentType: Principal}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: 410
+    fields: {Operation: FileDownloaded, UserId: "${user.id}@kestrelgate.example", AppId: "a7c3e9f1-2b4d-4e6f-8a0c-1d3f5b7e9a2c", SiteUrl: "/sites/Payroll", count: 9, ClientIP: 192.0.2.233}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -2400
+    fields: {eventType: "user.session.start", actor: "${user.id}", outcome: SUCCESS, client_ip: 10.30.3.62, geo_country: SG, managed_device: true}
+analyst_knowledge:
+  - fact: "Hazel owns the Payroll SharePoint site, which holds NRIC numbers, salaries and bank account details for every employee, so Files.Read.All under her token reaches all of it."
+    effect_on_decision: "Nine files already left through the app. Escalate to high as a personal-data breach (PDPA assessment), revoke the grant and tokens, and list what was downloaded."

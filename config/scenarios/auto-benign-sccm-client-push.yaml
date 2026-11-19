@@ -1,0 +1,49 @@
+id: auto-benign-sccm-client-push
+title: "Remote service created on ${target.id}"
+splunk_rule_name: "Endpoint - Remote Service Creation (Possible PsExec) - Rule"
+splunk_severity: medium
+outcome_class: auto_benign
+weight: 4
+demo_slot: 0
+mitre_techniques: [T1569.002, T1021.002]
+entities:
+  sccm: {pick: {kind: host, where: {pool: routine, role: sccm-site-server}}}
+  svc: {pick: {kind: user, where: {pool: routine, title: "Service account (SCCM)"}}}
+  target: {pick: {kind: host, where: {pool: routine, role: laptop}}}
+alert:
+  title: "Remote service created on ${target.id} by ${svc.id}"
+  description: "Service 'ccmsetup' was installed on ${target.id} over SMB from ${sccm.id}."
+  fields:
+    user: ${svc.id}
+    src: ${sccm.id}
+    src_zone: trust-servers
+    dest: ${target.id}
+    service_name: ccmsetup
+    service_path: "C:\\Windows\\ccmsetup\\ccmsetup.exe"
+    signature_id: 7045
+evidence:
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -64
+    fields: {EventCode: 4624, Computer: "${target.id}", TargetUserName: "${svc.id}", LogonType: 3, WorkstationName: "${sccm.id}", AuthenticationPackageName: Kerberos}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -64
+    fields: {EventCode: 4672, Computer: "${target.id}", SubjectUserName: "${svc.id}", PrivilegeList: "SeBackupPrivilege SeRestorePrivilege SeDebugPrivilege"}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -51
+    fields: {EventCode: 5145, Computer: "${target.id}", SubjectUserName: "${svc.id}", ShareName: "\\\\*\\ADMIN$", RelativeTargetName: "ccmsetup\\ccmsetup.exe", WorkstationName: "${sccm.id}"}
+  - source: edr
+    sourcetype: "WinEventLog:System"
+    offset_s: -2
+    fields: {EventCode: 7045, Computer: "${target.id}", ServiceName: ccmsetup, ImagePath: "C:\\Windows\\ccmsetup\\ccmsetup.exe /source:\\\\${sccm.id}\\SMS_KG1\\Client", ServiceType: "user mode service", StartType: "auto start", AccountName: LocalSystem}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 4
+    fields: {host: "${target.id}", event_simpleName: ProcessRollup2, image: "C:\\Windows\\ccmsetup\\ccmsetup.exe", parent: services.exe,
+             cmdline: "ccmsetup.exe /source:\\\\${sccm.id}\\SMS_KG1\\Client SMSSITECODE=KG1", signer: "Microsoft Corporation", signature_valid: true}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 95
+    fields: {host: "${target.id}", event_simpleName: ProcessRollup2, image: "C:\\Windows\\CCM\\CcmExec.exe", parent: services.exe, signer: "Microsoft Corporation", signature_valid: true}
