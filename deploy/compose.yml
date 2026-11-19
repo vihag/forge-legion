@@ -4,7 +4,7 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     env_file:
-      - ../.env.local
+      - ../${ENV_FILE:-.env.local}
     command:
       - uvicorn
       - services.case_api.app:app
@@ -30,7 +30,7 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     env_file:
-      - ../.env.local
+      - ../${ENV_FILE:-.env.local}
     command:
       - uvicorn
       - services.mock_splunk.app:app
@@ -54,7 +54,7 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     env_file:
-      - ../.env.local
+      - ../${ENV_FILE:-.env.local}
     command:
       - uvicorn
       - services.mock_soar.app:app
@@ -80,8 +80,9 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     env_file:
-      - ../.env.local
+      - ../${ENV_FILE:-.env.local}
     environment:
+      MCP_ADAPTER_TOKEN: ${MCP_ADAPTER_TOKEN:?}
       MCP_ALLOWED_HOSTS: "${NGROK_DOMAIN:-},${MCP_EXTRA_ALLOWED_HOSTS:-}"
     command:
       - uvicorn
@@ -102,9 +103,9 @@ services:
       retries: 20
 
   nginx:
-    image: nginx:alpine
+    image: nginx:1.27.4-alpine
     env_file:
-      - ../.env.local
+      - ../${ENV_FILE:-.env.local}
     environment:
       GATEWAY_PORT: ${GATEWAY_PORT}
       CASE_API_UPSTREAM: ${CASE_API_UPSTREAM}
@@ -132,7 +133,7 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     env_file:
-      - ../.env.local
+      - ../${ENV_FILE:-.env.local}
     command:
       - python
       - -m
@@ -151,7 +152,9 @@ services:
       - ngrok
     image: ngrok/ngrok:3
     env_file:
-      - ../.env.local
+      - ../${ENV_FILE:-.env.local}
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?}
     command:
       - http
       - --url=${NGROK_DOMAIN}

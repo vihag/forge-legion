@@ -52,11 +52,15 @@ def test_one_service_down_exits_1_and_names_it(
     monkeypatch.setenv("PUBLIC_BASE_URL", base)
     monkeypatch.setenv("HEALTH_TIMEOUT_S", "0")
 
+    calls = 0
+
     def _soar_down(
         base_url: str,
         fetch: object,
         bearer: str | None = None,
     ) -> list[CheckResult]:
+        nonlocal calls
+        calls += 1
         del base_url, fetch, bearer
         return [
             ("gateway", True, 200),
@@ -70,6 +74,7 @@ def test_one_service_down_exits_1_and_names_it(
     monkeypatch.setattr("scripts.health.run_checks", _soar_down)
     code = main()
     assert code == 1
+    assert calls > 0
     err = capsys.readouterr().out
     assert "FAIL soar" in err
 

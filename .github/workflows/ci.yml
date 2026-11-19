@@ -78,11 +78,13 @@ jobs:
           python scripts/assert_seed_triaged.py triage.json
       - name: Health fails when SOAR is down
         run: |
+          set -o pipefail
           docker compose --env-file .env.local -f deploy/compose.yml stop mock_soar
-          if HEALTH_TIMEOUT_S=5 make health; then
+          if HEALTH_TIMEOUT_S=5 make health 2>&1 | tee health-soar-down.txt; then
             echo "expected health to fail when mock_soar is stopped" >&2
             exit 1
           fi
+          grep -q 'FAIL soar' health-soar-down.txt
           docker compose --env-file .env.local -f deploy/compose.yml start mock_soar
           make health
       - name: Reset stores
@@ -103,6 +105,10 @@ jobs:
           with urllib.request.urlopen(f"{base}/soar/v1/submissions?case_id=1") as resp:
               soar = json.loads(resp.read())
           assert soar.get("items") == [], soar
+          seed_alert = os.environ.get("SEED_ALERT_ID", "SPL-2026-0001")
+          with urllib.request.urlopen(f"{base}/splunk/v1/alerts/{seed_alert}") as resp:
+              splunk = json.loads(resp.read())
+          assert splunk.get("alert_id") == seed_alert, splunk
           PY
       - name: Capture compose logs on failure
         if: always()

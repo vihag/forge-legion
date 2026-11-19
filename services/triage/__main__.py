@@ -28,6 +28,8 @@ def _resolve_grok_client(settings: TriageSettings) -> GrokClient | tuple[int, st
         if settings.grok_fixture_path is None:
             return 2, "GROK_FIXTURE_PATH is not set"
         return FixtureGrokClient(settings.grok_fixture_path, model_requested=settings.xai_model)
+    if settings.grok_client != "http":
+        return 2, f"unknown GROK_CLIENT {settings.grok_client!r} (expected http or fixture)"
     try:
         api_key = require_api_key(settings)
     except ConfigError as exc:

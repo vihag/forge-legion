@@ -30,6 +30,9 @@ Hard rules (from FORGE Lead):
 
 Every proxied location sets `Host $host`, `X-Forwarded-For` and `X-Forwarded-Proto`. The host port binding is `${GATEWAY_BIND}:${GATEWAY_PUBLIC_PORT}:${GATEWAY_PORT}`, and the defaults in the example are `127.0.0.1`, `8080` and `8080`.
 
+### Implementation deviation: `proxy_set_header Host $http_host`
+The contract table above documents `Host $host`. The shipped nginx template uses `proxy_set_header Host $http_host` on every upstream proxy location. MCP's transport security checks match the client `Host` header including the port (e.g. `localhost:8080`). Nginx's `$host` normalizes away the port, which made gateway health's MCP `initialize` check fail with HTTP 421 (invalid host). `$http_host` passes the client's `Host` through unchanged so DNS rebinding protection accepts gateway traffic.
+
 ## 2. Compose (`deploy/compose.yml`)
 - Every service uses `env_file: ../.env.local`. Interpolation comes from `--env-file .env.local`, and `make` always passes it.
 - `case_api`, `mock_splunk`, `mock_soar` and `mcp` run `uvicorn <module>:app --host 0.0.0.0 --port ${<SVC>_PORT}`, with a healthcheck that runs `python -c` urllib against the service's own `/healthz` (interval 3s, retries 20).

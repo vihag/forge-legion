@@ -2,7 +2,7 @@
 
 PYTHON ?= python3
 ENV_FILE ?= .env.local
-COMPOSE = docker compose --env-file $(ENV_FILE) -f deploy/compose.yml
+COMPOSE = ENV_FILE=$(ENV_FILE) docker compose --env-file $(ENV_FILE) -f deploy/compose.yml
 
 test:
 	$(PYTHON) -m pytest
@@ -39,8 +39,9 @@ up: _check_env
 	$(COMPOSE) up -d --build --wait
 
 up-public: _check_env
-	@if [ -z "$$MCP_ADAPTER_TOKEN" ]; then echo 'MCP_ADAPTER_TOKEN is required for up-public' >&2; exit 1; fi
-	@if [ -z "$$NGROK_AUTHTOKEN" ]; then echo 'NGROK_AUTHTOKEN is required for up-public' >&2; exit 1; fi
+	@set -a && . ./.env.local && set +a && \
+	if [ -z "$$MCP_ADAPTER_TOKEN" ]; then echo 'MCP_ADAPTER_TOKEN is required for up-public' >&2; exit 1; fi && \
+	if [ -z "$$NGROK_AUTHTOKEN" ]; then echo 'NGROK_AUTHTOKEN is required for up-public' >&2; exit 1; fi
 	$(COMPOSE) --profile ngrok up -d --build --wait
 
 down: _check_env

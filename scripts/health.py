@@ -113,11 +113,10 @@ def main() -> int:
     if bearer is not None and bearer.strip() == "":
         bearer = None
 
-    deadline = time.monotonic() + timeout_s
-    names = ["gateway", "case", "splunk", "soar", "mcp", "mcp_init"]
-    last_results: list[CheckResult] = [(name, False, 0) for name in names]
+    deadline = time.monotonic() + max(timeout_s, 0.0)
+    last_results: list[CheckResult] = []
 
-    while time.monotonic() < deadline:
+    while True:
         last_results = run_checks(base_url, _urllib_fetch, bearer=bearer)
         if all(ok for _, ok, _ in last_results):
             for name, _, code in last_results:
@@ -126,6 +125,8 @@ def main() -> int:
                 print(f"PASS {name} {code}")
             print(f"PASS mcp_init {last_results[-1][2]}")
             return 0
+        if time.monotonic() >= deadline:
+            break
         time.sleep(0.5)
 
     for name, ok, code in last_results:

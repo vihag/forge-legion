@@ -66,3 +66,14 @@ def test_http_mode_still_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.delenv("XAI_API_KEY", raising=False)
     code = triage_cli.main(["run", "--alert-id", ALERT_ID])
     assert code == 2
+
+
+def test_unknown_grok_client_exits_2(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("GROK_CLIENT", "bogus")
+    code = triage_cli.main(["run", "--alert-id", ALERT_ID])
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "unknown GROK_CLIENT" in captured.err
