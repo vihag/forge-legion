@@ -4,9 +4,9 @@ name: panel-demo-12min
 duration_s: 720
 seed: 42
 notes:
-- 36 alerts in 12 min (3/min). 5 HITL (14%), 4 of them in the first 4.5 min so LEGION (5-7 min/case) closes 2 on stage.
+- 36 alerts in 12 min (3/min). 6 HITL (17%), 5 of them in the first 4.5 min so LEGION (5-7 min/case) closes 2 on stage.
 - Auto entries reuse scenario files; pick-based entities draw new users/hosts per firing from the seed, and -v2 files change values.
-- Engine today only supports one firing per scenario at an integer demo_slot; this file is the at_s-level script the engine should play (see README).
+- Script mode plays these events in at_s order, one per stream tick (3/min = every 20 s, so event k fires at about 20*(k+1) s).
 events:
 - at_s: 5
   scenario: auto-fp-vuln-scanner-sweep
@@ -29,7 +29,9 @@ events:
 - at_s: 150
   scenario: auto-benign-vpn-roaming-travel
 - at_s: 170
-  scenario: auto-fp-dns-edr-telemetry-entropy
+  scenario: hitl-confirm-findb-index-maintenance
+  hitl: true
+  note: 'benign-looking medium on crown-jewel FIN-DB-01 by a privileged DBA: triaged low/medium but the auto-close gate refuses it, so CENTURION investigates'
 - at_s: 190
   scenario: hitl-upgrade-oauth-consent-cfo-delegate
   hitl: true

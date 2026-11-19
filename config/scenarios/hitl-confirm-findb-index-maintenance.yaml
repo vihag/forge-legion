@@ -1,0 +1,40 @@
+id: hitl-confirm-findb-index-maintenance
+title: "SQL maintenance job ran outside its window on FIN-DB-01"
+splunk_rule_name: "Database - Scheduled Job Executed Outside Maintenance Window - Rule"
+splunk_severity: medium
+outcome_class: hitl_confirm
+assessed_severity: medium
+weight: 0
+mitre_techniques: [T1053]
+entities:
+  user: {ref: "user:adm.slee"}
+  jump: {ref: "host:JMP-01"}
+  db: {ref: "host:FIN-DB-01"}
+alert:
+  title: "Index maintenance job on ${db.id} started 40 min early by ${user.id}"
+  description: "SQL Agent job 'IndexOptimize - USER_DATABASES' on ${db.id} was started manually by ${user.id} via ${jump.id}, 40 minutes before its scheduled 02:00 window."
+  fields: {user: "${user.id}", src: "${jump.id}", dest: "${db.id}", job_name: "IndexOptimize - USER_DATABASES", run_type: manual, scheduled_window: "02:00-03:00 SGT"}
+evidence:
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -300
+    fields: {EventCode: 4624, TargetUserName: "${user.id}", LogonType: 10, WorkstationName: "${jump.id}", ComputerName: "${db.id}", AuthenticationPackageName: Kerberos}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 0
+    fields: {event_simpleName: ProcessRollup2, ComputerName: "${db.id}", UserName: "${user.id}", ImageFileName: "sqlcmd.exe", CommandLine: "sqlcmd -S localhost -E -Q \"EXEC msdb.dbo.sp_start_job N'IndexOptimize - USER_DATABASES'\"", ParentBaseFileName: "Ssms.exe"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 2400
+    fields: {event_simpleName: ProcessRollup2, ComputerName: "${db.id}", UserName: "NT SERVICE\\SQLSERVERAGENT", ImageFileName: "sqlagent.exe", CommandLine: "job 'IndexOptimize - USER_DATABASES' completed: outcome Succeeded, 0 errors", ParentBaseFileName: "services.exe"}
+  - source: firewall
+    sourcetype: "pan:traffic"
+    offset_s: 1200
+    fields: {src: "${db.id}", dest_zone: internal, app: ms-sql, rule: "finance-db-internal", bytes_sent: 18432, session_end_reason: tcp-fin}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -86400
+    fields: {EventCode: 4624, TargetUserName: "${user.id}", LogonType: 10, WorkstationName: "${jump.id}", ComputerName: "${db.id}", AuthenticationPackageName: Kerberos}
+analyst_knowledge:
+  - fact: "Sarah started the job early because the overnight batch-settlement run was moved to 02:00 tonight under change CHG-30470; she told the on-call lead in the DBA channel."
+    effect_on_decision: "Looks benign, but it is a privileged manual action on the PCI-scope finance database, so it can't be closed by policy. Confirm at medium, reference CHG-30470 and close."

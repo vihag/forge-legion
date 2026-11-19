@@ -350,7 +350,11 @@ def main(argv: list[str] | None = None) -> int:
         loaded = load_scenarios(world_path=args.world, scenario_dir=args.dir)
         from services.mock_splunk.stream import plan_script
 
-        plan = plan_script(loaded.scenarios, seed=0)
+        plan = plan_script(
+            loaded.scenarios,
+            seed=0,
+            script_path=args.dir.parent / "demo_script.yaml",
+        )
         print(f"script plan: {len(plan)} events")
         return 0
     return 2
