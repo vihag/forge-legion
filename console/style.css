@@ -620,3 +620,137 @@ footer {
   color: var(--charcoal-soft);
   font-size: 0.8rem;
 }
+
+/* Live feed filter (segmented control) */
+.feed-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.25rem 0 0.75rem;
+  padding: 0.3rem;
+  background: var(--ivory);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.seg {
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--charcoal);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+}
+
+.seg::before {
+  content: "";
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--charcoal-soft);
+}
+
+.seg[data-filter="all"]::before {
+  display: none;
+}
+
+.seg-auto::before {
+  background: var(--green);
+}
+
+.seg-legion::before {
+  background: var(--terracotta);
+}
+
+.seg-awaiting::before {
+  background: var(--brown);
+}
+
+.seg-analyst::before {
+  background: var(--charcoal);
+}
+
+.seg:hover {
+  background: var(--ivory-deep);
+}
+
+.seg:focus-visible {
+  outline: 3px solid var(--brown);
+  outline-offset: 1px;
+}
+
+.seg[aria-pressed="true"] {
+  background: var(--brown);
+  color: #fff;
+}
+
+.seg[aria-pressed="true"]::before {
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.seg-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--ivory-deep);
+  color: var(--charcoal);
+  min-width: 1.6rem;
+  text-align: center;
+}
+
+.seg[aria-pressed="true"] .seg-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+/* Outcome border on each feed row */
+#recent-table tbody td:first-child {
+  box-shadow: inset 5px 0 0 transparent;
+  padding-left: 0.9rem;
+}
+
+#recent-table tr.outcome-auto td:first-child {
+  box-shadow: inset 5px 0 0 var(--green);
+}
+
+#recent-table tr.outcome-legion td:first-child {
+  box-shadow: inset 5px 0 0 var(--terracotta);
+}
+
+#recent-table tr.outcome-awaiting td:first-child {
+  box-shadow: inset 5px 0 0 var(--brown);
+}
+
+#recent-table tr.outcome-analyst td:first-child {
+  box-shadow: inset 5px 0 0 var(--charcoal);
+}
+
+/* Brief highlight for rows that are new (or changed status) since the last poll */
+@keyframes row-fresh {
+  from {
+    background-color: rgba(114, 80, 57, 0.22);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+#recent-table tr.fresh td {
+  animation: row-fresh 2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #recent-table tr.fresh td {
+    animation: none;
+  }
+}

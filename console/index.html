@@ -101,6 +101,13 @@
             <h2>Live feed</h2>
             <p class="explain">Most recent cases, newest first. Severity shows Splunk's rating, then Grok's when it changed.</p>
           </div>
+          <div class="feed-filter" id="feed-filter" role="group" aria-label="Filter the live feed">
+            <button type="button" class="seg" data-filter="all" aria-pressed="true">All <span class="seg-count" data-count="all">0</span></button>
+            <button type="button" class="seg seg-auto" data-filter="auto" aria-pressed="false">Auto-closed <span class="seg-count" data-count="auto">0</span></button>
+            <button type="button" class="seg seg-legion" data-filter="legion" aria-pressed="false">Sent to LEGION <span class="seg-count" data-count="legion">0</span></button>
+            <button type="button" class="seg seg-awaiting" data-filter="awaiting" aria-pressed="false">Awaiting your decision <span class="seg-count" data-count="awaiting">0</span></button>
+            <button type="button" class="seg seg-analyst" data-filter="analyst" aria-pressed="false">Closed by analyst <span class="seg-count" data-count="analyst">0</span></button>
+          </div>
           <table id="recent-table" class="data-table">
             <thead>
               <tr>

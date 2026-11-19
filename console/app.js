@@ -41,6 +41,151 @@ const AGENT_NAMES = {
   "policy:autonomous-triage": "Auto-close policy",
 };
 
+const FILTER_KEY = "legion.console.feedFilter";
+const FILTERS = ["all", "auto", "legion", "awaiting", "analyst"];
+const FEED_MAX = 50;
+
+/*
+ * Outcome buckets for the live feed, from the API's own fields:
+ *   auto     - status AUTO_RESOLVED (closed by the auto-close policy)
+ *   legion   - handed to LEGION and still being worked:
+ *              TRIAGED on the collaborative or autonomous track, or INVESTIGATING
+ *   awaiting - DISPOSITION_PROPOSED or NEEDS_REVIEW (an analyst call is pending)
+ *   analyst  - APPROVED, SUBMITTED or REJECTED (an analyst has decided)
+ * NEW and TRIAGED on the review track belong to no bucket and show under All only.
+ */
+function outcomeOf(row) {
+  switch (row.status) {
+    case "AUTO_RESOLVED":
+      return "auto";
+    case "INVESTIGATING":
+      return "legion";
+    case "TRIAGED":
+      return row.route === "collaborative" || row.route === "autonomous" ? "legion" : null;
+    case "DISPOSITION_PROPOSED":
+    case "NEEDS_REVIEW":
+      return "awaiting";
+    case "APPROVED":
+    case "SUBMITTED":
+    case "REJECTED":
+      return "analyst";
+    default:
+      return null;
+  }
+}
+
+/*
+ * The metrics endpoint returns the 20 most recently updated cases. The feed
+ * keeps every case it has seen since the page loaded (up to FEED_MAX); a case
+ * that changes is always updated most recently, so it re-enters the window.
+ */
+const feed = {
+  cases: new Map(),
+  seenKeys: null,
+  freshKeys: new Set(),
+  lastTotal: null,
+  filter: loadFilter(),
+};
+
+function loadFilter() {
+  try {
+    const saved = window.localStorage.getItem(FILTER_KEY);
+    return FILTERS.includes(saved) ? saved : "all";
+  } catch (_err) {
+    return "all";
+  }
+}
+
+function saveFilter(value) {
+  try {
+    window.localStorage.setItem(FILTER_KEY, value);
+  } catch (_err) {
+    /* storage unavailable: keep the choice for this session only */
+  }
+}
+
+function rowKey(row) {
+  return `${row.id}:${row.status}`;
+}
+
+function sortedFeed() {
+  return [...feed.cases.values()].sort((a, b) => {
+    const byTime = String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
+    return byTime !== 0 ? byTime : b.id - a.id;
+  });
+}
+
+function mergeRecent(metrics) {
+  const total = metrics.counts.total;
+  const recent = metrics.recent || [];
+  let reset = feed.lastTotal != null && total < feed.lastTotal;
+  for (const row of recent) {
+    const known = feed.cases.get(row.id);
+    if (known && known.alert_id !== row.alert_id) {
+      reset = true;
+    }
+  }
+  if (reset) {
+    feed.cases.clear();
+  }
+  feed.lastTotal = total;
+  for (const row of recent) {
+    feed.cases.set(row.id, row);
+  }
+  const rows = sortedFeed();
+  for (const row of rows.slice(FEED_MAX)) {
+    feed.cases.delete(row.id);
+  }
+  const keys = new Set(rows.slice(0, FEED_MAX).map(rowKey));
+  // Highlight a row when the case is new or its status changed since the last poll.
+  // Nothing is highlighted on the first load.
+  feed.freshKeys = new Set();
+  if (feed.seenKeys !== null && !reset) {
+    for (const key of keys) {
+      if (!feed.seenKeys.has(key)) {
+        feed.freshKeys.add(key);
+      }
+    }
+  }
+  feed.seenKeys = keys;
+}
+
+function renderFilter() {
+  const counts = { all: 0, auto: 0, legion: 0, awaiting: 0, analyst: 0 };
+  for (const row of feed.cases.values()) {
+    counts.all += 1;
+    const bucket = outcomeOf(row);
+    if (bucket) {
+      counts[bucket] += 1;
+    }
+  }
+  for (const node of document.querySelectorAll("[data-count]")) {
+    node.textContent = String(counts[node.dataset.count] ?? 0);
+  }
+  for (const button of document.querySelectorAll("#feed-filter [data-filter]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.filter === feed.filter));
+  }
+}
+
+function initFilter() {
+  const group = document.getElementById("feed-filter");
+  if (!group) {
+    return;
+  }
+  group.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-filter]");
+    if (!button) {
+      return;
+    }
+    feed.filter = button.dataset.filter;
+    saveFilter(feed.filter);
+    feed.freshKeys = new Set();
+    renderFilter();
+    renderRecent();
+  });
+  renderFilter();
+}
+
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) {
@@ -238,26 +383,29 @@ function pill(map, key, base) {
   return el("span", `${base} ${entry[1]}`, entry[0]);
 }
 
-function renderRecent(recent) {
+function renderRecent() {
   const body = document.querySelector("#recent-table tbody");
   if (!body) {
     return;
   }
-  const rows = [...(recent || [])].sort((a, b) => {
-    const byTime = String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
-    return byTime !== 0 ? byTime : b.id - a.id;
-  });
+  const rows = sortedFeed().filter(
+    (row) => feed.filter === "all" || outcomeOf(row) === feed.filter,
+  );
   body.replaceChildren();
   if (rows.length === 0) {
     const tr = el("tr");
-    const td = el("td", "empty", "No cases yet");
+    const td = el("td", "empty", feed.cases.size === 0 ? "No cases yet" : "No cases in this view yet");
     td.colSpan = 6;
     tr.appendChild(td);
     body.appendChild(tr);
     return;
   }
   for (const row of rows) {
-    const tr = el("tr");
+    const bucket = outcomeOf(row);
+    const tr = el("tr", bucket ? `outcome-${bucket}` : "outcome-none");
+    if (feed.freshKeys.has(rowKey(row))) {
+      tr.classList.add("fresh");
+    }
 
     const idCell = el("td", "case-id", `#${row.id}`);
 
@@ -366,8 +514,9 @@ function applyMetrics(metrics) {
   setField("counts.collaborative_open", formatNumber(metrics.counts.collaborative_open));
   setField("counts.with_legion_open", formatNumber(metrics.counts.with_legion_open));
   setField("counts.needs_review", formatNumber(metrics.counts.needs_review));
+  mergeRecent(metrics);
   renderUplifts(metrics.uplifts);
-  renderDowngrades(metrics.downgrades, metrics.recent);
+  renderDowngrades(metrics.downgrades, [...feed.cases.values()]);
 
   const banner = document.getElementById("auto-off-banner");
   const minutesTile = document.getElementById("tile-minutes");
@@ -385,7 +534,8 @@ function applyMetrics(metrics) {
   renderTiming("timing-triage", metrics.time_to_triage_s);
   renderTiming("timing-ai-only", metrics.time_to_resolve_s.ai_only);
   renderTiming("timing-ai-human", metrics.time_to_resolve_s.ai_plus_human);
-  renderRecent(metrics.recent);
+  renderFilter();
+  renderRecent();
   renderAgents(metrics.agents);
 
   const updated = document.getElementById("last-updated");
@@ -410,5 +560,6 @@ async function refresh() {
   }
 }
 
+initFilter();
 refresh();
 window.setInterval(refresh, POLL_MS);
