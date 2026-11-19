@@ -11,7 +11,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from starlette.routing import Mount
+from starlette.routing import Mount, Route
 
 from services.mcp_adapter.case_client import CaseApiClient
 from services.mcp_adapter.config import AdapterConfig, load_allowed_hosts, load_config
@@ -82,13 +82,19 @@ def create_app(
     if cfg.adapter_token is not None:
         handler = BearerGateMiddleware(inner, cfg.adapter_token)
 
+    async def healthz(_request: Request) -> JSONResponse:
+        return JSONResponse({"status": "ok"})
+
     @asynccontextmanager
     async def lifespan(_application: Starlette) -> AsyncIterator[None]:
         async with mcp.session_manager.run():
             yield
 
     application = Starlette(
-        routes=[Mount("/mcp", app=handler)],
+        routes=[
+            Route("/healthz", healthz),
+            Mount("/mcp", app=handler),
+        ],
         lifespan=lifespan,
     )
     application.router.redirect_slashes = False

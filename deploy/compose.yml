@@ -1,0 +1,166 @@
+services:
+  case_api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file:
+      - ../${ENV_FILE:-.env.local}
+    command:
+      - uvicorn
+      - services.case_api.app:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "${CASE_API_PORT}"
+    volumes:
+      - forge_data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os,urllib.request; urllib.request.urlopen('http'+'://127.0.0.1:'+os.environ['CASE_API_PORT']+'/healthz')",
+        ]
+      interval: 3s
+      retries: 20
+
+  mock_splunk:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file:
+      - ../${ENV_FILE:-.env.local}
+    command:
+      - uvicorn
+      - services.mock_splunk.app:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "${MOCK_SPLUNK_PORT}"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os,urllib.request; urllib.request.urlopen('http'+'://127.0.0.1:'+os.environ['MOCK_SPLUNK_PORT']+'/healthz')",
+        ]
+      interval: 3s
+      retries: 20
+
+  mock_soar:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file:
+      - ../${ENV_FILE:-.env.local}
+    command:
+      - uvicorn
+      - services.mock_soar.app:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "${MOCK_SOAR_PORT}"
+    volumes:
+      - forge_data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os,urllib.request; urllib.request.urlopen('http'+'://127.0.0.1:'+os.environ['MOCK_SOAR_PORT']+'/healthz')",
+        ]
+      interval: 3s
+      retries: 20
+
+  mcp:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file:
+      - ../${ENV_FILE:-.env.local}
+    environment:
+      MCP_ADAPTER_TOKEN: ${MCP_ADAPTER_TOKEN?}
+      MCP_ALLOWED_HOSTS: "${NGROK_DOMAIN:-},${MCP_EXTRA_ALLOWED_HOSTS:-}"
+    command:
+      - uvicorn
+      - services.mcp_adapter.app:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "${MCP_PORT}"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os,urllib.request; urllib.request.urlopen('http'+'://127.0.0.1:'+os.environ['MCP_PORT']+'/healthz')",
+        ]
+      interval: 3s
+      retries: 20
+
+  nginx:
+    image: nginx:1.27.4-alpine
+    env_file:
+      - ../${ENV_FILE:-.env.local}
+    environment:
+      GATEWAY_PORT: ${GATEWAY_PORT}
+      CASE_API_UPSTREAM: ${CASE_API_UPSTREAM}
+      MOCK_SPLUNK_UPSTREAM: ${MOCK_SPLUNK_UPSTREAM}
+      MOCK_SOAR_UPSTREAM: ${MOCK_SOAR_UPSTREAM}
+      MCP_UPSTREAM: ${MCP_UPSTREAM}
+    ports:
+      - "${GATEWAY_BIND}:${GATEWAY_PUBLIC_PORT}:${GATEWAY_PORT}"
+    volumes:
+      - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    depends_on:
+      case_api:
+        condition: service_healthy
+      mock_splunk:
+        condition: service_healthy
+      mock_soar:
+        condition: service_healthy
+      mcp:
+        condition: service_healthy
+
+  triage:
+    profiles:
+      - tools
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file:
+      - ../${ENV_FILE:-.env.local}
+    command:
+      - python
+      - -m
+      - services.triage
+      - run
+      - --alert-id
+      - "${SEED_ALERT_ID}"
+    depends_on:
+      case_api:
+        condition: service_healthy
+      mock_splunk:
+        condition: service_healthy
+
+  ngrok:
+    profiles:
+      - ngrok
+    image: ngrok/ngrok:3
+    env_file:
+      - ../${ENV_FILE:-.env.local}
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN?}
+    command:
+      - http
+      - --url=${NGROK_DOMAIN}
+      - nginx:${GATEWAY_PORT}
+    depends_on:
+      - nginx
+
+volumes:
+  forge_data:

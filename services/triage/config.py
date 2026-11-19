@@ -20,18 +20,24 @@ class TriageSettings:
     mock_splunk_url: str
     routing_config: RoutingConfig
     routing_path: Path
+    grok_client: str = "http"
+    grok_fixture_path: Path | None = None
 
 
 def load_settings() -> TriageSettings:
     routing_path = Path(
         os.environ.get("ROUTING_CONFIG", str(DEFAULT_ROUTING_PATH)),
     )
+    fixture_raw = os.environ.get("GROK_FIXTURE_PATH", "").strip()
+    fixture_path = Path(fixture_raw) if fixture_raw else None
     return TriageSettings(
         xai_api_key=_optional_env("XAI_API_KEY"),
         xai_model=os.environ.get("XAI_MODEL", "grok-3-mini"),
         xai_base_url=os.environ.get("XAI_BASE_URL", "https://api.x.ai/v1").rstrip("/"),
         case_api_url=os.environ.get("CASE_API_URL", "http://127.0.0.1:8000").rstrip("/"),
         mock_splunk_url=os.environ.get("MOCK_SPLUNK_URL", "http://127.0.0.1:8001").rstrip("/"),
+        grok_client=os.environ.get("GROK_CLIENT", "http").lower(),
+        grok_fixture_path=fixture_path,
         routing_config=load_routing(routing_path),
         routing_path=routing_path,
     )

@@ -28,6 +28,8 @@ class GrokResponse:
 class GrokClient(Protocol):
     def assess(self, user_message: str, *, evidence_ids: set[str]) -> GrokResponse: ...
 
+    def close(self) -> None: ...
+
 
 class GrokCallError(Exception):
     def __init__(self, message: str, *, detail: str = "") -> None:
@@ -108,6 +110,9 @@ class FixtureGrokClient:
     @property
     def model_requested(self) -> str:
         return self._model_requested
+
+    def close(self) -> None:
+        return None
 
     def assess(self, user_message: str, *, evidence_ids: set[str]) -> GrokResponse:
         del user_message, evidence_ids
