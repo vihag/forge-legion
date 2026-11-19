@@ -20,8 +20,9 @@ def main(argv: list[str] | None = None) -> int:
     with open(args[0], encoding="utf-8") as handle:
         payload = json.loads(handle.read())
     outcome = payload.get("outcome")
-    if outcome != "triaged":
-        print(f"expected outcome triaged, got {outcome!r}", file=sys.stderr)
+    # With triage_worker up, the seed alert may already be TRIAGED (C3 idempotency).
+    if outcome not in ("triaged", "skipped_existing"):
+        print(f"expected outcome triaged or skipped_existing, got {outcome!r}", file=sys.stderr)
         return 1
     base_url = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8080").rstrip("/")
     query = urllib.parse.urlencode({"alert_id": SEED_ALERT_ID})
