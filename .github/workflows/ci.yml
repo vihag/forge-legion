@@ -88,12 +88,19 @@ jobs:
           printf '\nGROK_CLIENT=fixture\nGROK_FIXTURE_PATH=\nMCP_ADAPTER_TOKEN=ci-boot-smoke-token\nAUTO_RESOLVE_ENABLED=1\nSTREAM_RATE_PER_MIN=60\n' >> .env.local
       - name: Compose up and health
         run: |
-          make up
+          # Hold the worker back until the seed is triaged: its stream fixture
+          # client has no response for SPL-2026-0001 and would send it to review.
+          docker compose --env-file .env.local -f deploy/compose.yml up -d --build --wait --scale triage_worker=0
           make health
       - name: Triage seed
         run: |
-          make triage-seed 2>triage.stderr | tee triage.json
+          set -o pipefail
+          docker compose --env-file .env.local -f deploy/compose.yml --profile tools run --rm -T \
+            -e GROK_FIXTURE_PATH=/app/tests/triage/fixtures/grok_seed_ok.json \
+            triage 2>triage.stderr | tee triage.json || { cat triage.stderr; exit 1; }
           python scripts/assert_seed_triaged.py triage.json
+      - name: Start triage worker
+        run: docker compose --env-file .env.local -f deploy/compose.yml up -d --wait --scale triage_worker=1 triage_worker
       - name: Health fails when SOAR is down
         run: |
           set -o pipefail
