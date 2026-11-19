@@ -780,10 +780,10 @@ class CaseService:
 
         agent_map: dict[tuple[str, str], MetricsAgent] = {}
         for event in agent_events:
-            key = (event.actor.id, event.actor.type)
-            existing = agent_map.get(key)
+            agent_key = (event.actor.id, event.actor.type)
+            existing = agent_map.get(agent_key)
             if existing is None:
-                agent_map[key] = MetricsAgent(
+                agent_map[agent_key] = MetricsAgent(
                     actor_id=event.actor.id,
                     type=event.actor.type,
                     events=1,
@@ -793,7 +793,7 @@ class CaseService:
                 last_seen = existing.last_seen
                 if event.ts > last_seen:
                     last_seen = event.ts
-                agent_map[key] = MetricsAgent(
+                agent_map[agent_key] = MetricsAgent(
                     actor_id=existing.actor_id,
                     type=existing.type,
                     events=existing.events + 1,

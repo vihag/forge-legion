@@ -192,7 +192,6 @@ def test_m1_fixture_store_exact_metrics(metrics_client: TestClient) -> None:
     for key, value in expected.items():
         assert body[key] == value, (key, body[key], value)
     assert body["time_to_triage_s"] == expected["time_to_triage_s"]
-    empty = {"n": 0, "median": None, "average": None}
     assert metrics_client.get("/v1/metrics").json()["agents"] == []
 
 

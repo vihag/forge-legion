@@ -4,6 +4,14 @@ FORGE × LEGION: agentic SOC triage and investigation on legacy Splunk, powered 
 
 This repository ships the C1 case store and case API (`/v1`), the C2 Mock Splunk service, the C3 LangGraph triage runner, C4 Mock SOAR, the MCP adapter, and the C5 compose deployment behind nginx on one origin. The binding contracts are [`contracts/C1-contract.md`](contracts/C1-contract.md), [`contracts/C2-contract.md`](contracts/C2-contract.md), [`contracts/C3-contract.md`](contracts/C3-contract.md), [`contracts/C4-contract.md`](contracts/C4-contract.md), and [`contracts/C5-contract.md`](contracts/C5-contract.md).
 
+## Demo shift (C7)
+
+The SOC command center console is at `http://localhost:8080/console/` after `make up`. It polls `GET /case/v1/metrics` and renders KPIs from the Case API only (no client-side recomputation).
+
+Simulated alert traffic: `make stream-start` runs the Mock Splunk stream at `STREAM_RATE_PER_MIN` (default 3/min). `make stream-status` and `make stream-stop` report or halt the ticker. With `AUTO_RESOLVE_ENABLED=0` (default), the console shows an **AUTO-RESOLVE OFF** banner; turn on autonomous resolution with `make env-set KEY=AUTO_RESOLVE_ENABLED VALUE=1` then recreate the stack (`make up`).
+
+Verify metrics against case views: `python scripts/metrics_check.py --base http://localhost:8080`.
+
 ## Compose deployment (C5)
 
 Create or refresh local env keys (never commit `.env.local`), then start the stack:

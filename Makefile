@@ -1,4 +1,4 @@
-.PHONY: test lint mypy triage-smoke triage-record openapi run-soar run-mcp e2e-soar up up-public down reset health triage-seed compose-config env-merge gen-secret
+.PHONY: test lint mypy triage-smoke triage-record openapi run-soar run-mcp e2e-soar up up-public down reset health triage-seed compose-config env-merge env-set gen-secret scenarios-check
 
 PYTHON ?= python3
 ENV_FILE ?= .env.local
@@ -37,6 +37,11 @@ _check_env:
 
 env-merge:
 	$(PYTHON) scripts/env_merge.py --env-file $(ENV_FILE)
+
+env-set:
+	@test -n "$(KEY)" || (echo 'KEY= is required' >&2; exit 1)
+	@test -n "$(VALUE)" || (echo 'VALUE= is required' >&2; exit 1)
+	$(PYTHON) scripts/env_merge.py --env-file $(ENV_FILE) --set "$(KEY)" --value "$(VALUE)"
 
 gen-secret:
 	@test -n "$(KEY)" || (echo 'KEY= is required' >&2; exit 1)
