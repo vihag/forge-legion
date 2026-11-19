@@ -57,7 +57,7 @@ def _errors(*codes: int) -> dict[int | str, dict[str, Any]]:
         403: "Actor is not an analyst",
         404: "Case not found",
         409: "Conflict",
-        422: "Validation error",
+        422: "Validation error or instruction mismatch",
         502: "SOAR submission failed",
     }
     return {code: {"model": ErrorResponse, "description": descriptions[code]} for code in codes}

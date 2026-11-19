@@ -18,12 +18,15 @@ from tests.mcp_adapter.asgi_transport import FastApiTestTransport
 
 CONTRACT_TOOLS = (
     "add_evidence",
+    "get_alert",
     "get_case",
     "get_case_history",
+    "list_alert_evidence",
     "list_cases",
     "propose_disposition",
     "record_finding",
     "request_soar_action",
+    "search_evidence",
 )
 
 

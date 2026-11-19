@@ -6,19 +6,19 @@ This repository ships the C1 case store and case API (`/v1`), the C2 Mock Splunk
 
 ## Compose deployment (C5)
 
-Copy the example env file, edit secrets locally (never commit `.env.local`), and start the stack:
+Create or refresh local env keys (never commit `.env.local`), then start the stack:
 
 ```bash
-cp .env.example .env.local
+make env-merge
 make up
 make health
 ```
 
 The gateway listens on `GATEWAY_PUBLIC_PORT` (default `8080`) and routes `/case/`, `/splunk/`, `/soar/`, and `/mcp` to the four backends. `make reset` clears the case DB, Mock SOAR DB, and Mock Splunk seed together via the gateway.
 
-**Fixture triage (no Grok key):** CI and local smoke can set `GROK_CLIENT=fixture` and `GROK_FIXTURE_PATH` so `make triage-seed` exercises the seed alert without `XAI_API_KEY`. That proves compose wiring, not live inference — use `make triage-smoke` for a real Grok call.
+**Fixture triage (no Grok key):** `GROK_CLIENT` defaults to `http` (live Grok). For keyless runs set `GROK_CLIENT=fixture` and `GROK_FIXTURE_PATH` so `make triage-seed` exercises the seed alert without `XAI_API_KEY`. That proves compose wiring, not live inference — use `make triage-smoke` for a real Grok call.
 
-**Public tunnel:** `make up-public` requires non-empty `MCP_ADAPTER_TOKEN` and `NGROK_AUTHTOKEN`, then starts the `ngrok` compose profile against `NGROK_DOMAIN`.
+**Public tunnel:** `make up-public` is the only supported public path. It requires non-empty `MCP_ADAPTER_TOKEN` and `NGROK_AUTHTOKEN`, then starts the `ngrok` compose profile against `NGROK_DOMAIN` on the MCP-only public gateway port (`PUBLIC_GATEWAY_PORT`, default 8081). Case, Splunk, and SOAR APIs are not exposed publicly.
 
 ```bash
 make compose-config ENV_FILE=.env.example   # validate compose without .env.local

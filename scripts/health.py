@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import time
@@ -106,9 +107,57 @@ def run_checks(
     return results
 
 
-def main() -> int:
+def _health_timeout_from_file(env_file: str) -> str | None:
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / env_file
+    if not path.is_file():
+        return None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("HEALTH_TIMEOUT_S="):
+            return line.split("=", 1)[1].strip()
+    return None
+
+
+def resolve_timeout(
+    *,
+    cli_flag: float | None,
+    env_value: str | None,
+    file_value: str | None,
+) -> float:
+    """Precedence: CLI flag > shell env > env file > default 60."""
+    if cli_flag is not None:
+        return cli_flag
+    if env_value is not None and env_value.strip() != "":
+        return float(env_value)
+    if file_value is not None and file_value.strip() != "":
+        return float(file_value)
+    return 60.0
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="FORGE gateway health checks")
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=None,
+        help="Overall timeout in seconds (overrides HEALTH_TIMEOUT_S)",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    import sys
+
+    cli_argv = sys.argv[1:] if argv is None else argv
+    args = _parse_args(cli_argv)
     base_url = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8080")
-    timeout_s = float(os.environ.get("HEALTH_TIMEOUT_S", "60"))
+    file_timeout = _health_timeout_from_file(os.environ.get("ENV_FILE", ".env.local"))
+    timeout_s = resolve_timeout(
+        cli_flag=args.timeout,
+        env_value=os.environ.get("HEALTH_TIMEOUT_S"),
+        file_value=file_timeout,
+    )
     bearer = os.environ.get("MCP_ADAPTER_TOKEN") or None
     if bearer is not None and bearer.strip() == "":
         bearer = None

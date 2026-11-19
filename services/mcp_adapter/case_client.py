@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import httpx
 
-from contracts.models import Actor
+from contracts.models import Actor, DecisionSource
 
 
 class CaseApiHttpError(Exception):
@@ -194,3 +194,21 @@ class CaseApiClient:
             f"/v1/cases/{case_id}/soar-submission",
             json={"actor": actor.model_dump(mode="json")},
         )
+
+    def record_decision(
+        self,
+        case_id: int,
+        *,
+        decision: str,
+        rationale: str,
+        actor: Actor,
+        source: DecisionSource | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "decision": decision,
+            "rationale": rationale,
+            "actor": actor.model_dump(mode="json"),
+        }
+        if source is not None:
+            payload["source"] = source.model_dump(mode="json")
+        return self._request_dict("POST", f"/v1/cases/{case_id}/decision", json=payload)

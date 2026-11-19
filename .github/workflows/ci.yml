@@ -67,7 +67,7 @@ jobs:
       - name: Prepare env
         run: |
           cp .env.example .env.local
-          printf '\nGROK_CLIENT=fixture\n' >> .env.local
+          printf '\nGROK_CLIENT=fixture\nMCP_ADAPTER_TOKEN=ci-boot-smoke-token\n' >> .env.local
       - name: Compose up and health
         run: |
           make up
@@ -87,6 +87,56 @@ jobs:
           grep -q 'FAIL soar' health-soar-down.txt
           docker compose --env-file .env.local -f deploy/compose.yml start mock_soar
           make health
+      - name: Public gateway exposes MCP only
+        run: |
+          set -a && . ./.env.local && set +a
+          docker compose --env-file .env.local -f deploy/compose.yml exec -T case_api python - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          public_port = os.environ.get("PUBLIC_GATEWAY_PORT", "8081")
+          local_port = os.environ.get("GATEWAY_PORT", "8080")
+          def fetch(url: str, *, headers: dict[str, str] | None = None) -> int:
+              req = urllib.request.Request(url, headers=headers or {})
+              try:
+                  with urllib.request.urlopen(req) as resp:
+                      return resp.getcode() or 0
+              except urllib.error.HTTPError as exc:
+                  return exc.code
+
+          assert fetch(f"http://nginx:{public_port}/case/v1/cases") == 404
+          assert fetch(f"http://nginx:{public_port}/splunk/v1/alerts") == 404
+          init = json.dumps(
+              {
+                  "jsonrpc": "2.0",
+                  "id": 1,
+                  "method": "initialize",
+                  "params": {
+                      "protocolVersion": "2025-03-26",
+                      "capabilities": {},
+                      "clientInfo": {"name": "ci", "version": "0"},
+                  },
+              }
+          ).encode()
+          mcp_req = urllib.request.Request(
+              f"http://nginx:{public_port}/mcp",
+              data=init,
+              headers={
+                  "Content-Type": "application/json",
+                  "Accept": "application/json, text/event-stream",
+              },
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(mcp_req) as resp:
+                  mcp_code = resp.getcode() or 0
+          except urllib.error.HTTPError as exc:
+              mcp_code = exc.code
+          assert mcp_code == 401
+          assert fetch(f"http://nginx:{local_port}/case/v1/cases") == 200
+          PY
       - name: Reset stores
         run: |
           set -a && . ./.env.local && set +a

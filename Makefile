@@ -1,4 +1,4 @@
-.PHONY: test lint mypy triage-smoke triage-record openapi run-soar run-mcp e2e-soar up up-public down reset health triage-seed compose-config
+.PHONY: test lint mypy triage-smoke triage-record openapi run-soar run-mcp e2e-soar up up-public down reset health triage-seed compose-config env-merge gen-secret
 
 PYTHON ?= python3
 ENV_FILE ?= .env.local
@@ -33,7 +33,14 @@ e2e-soar:
 		$(PYTHON) -m pytest tests/test_soar_integration.py -q
 
 _check_env:
-	@test -f .env.local || (echo 'cp .env.example .env.local'; exit 1)
+	@test -f $(ENV_FILE) || (echo 'run make env-merge to create $(ENV_FILE)' >&2; exit 1)
+
+env-merge:
+	$(PYTHON) scripts/env_merge.py --env-file $(ENV_FILE)
+
+gen-secret:
+	@test -n "$(KEY)" || (echo 'KEY= is required' >&2; exit 1)
+	$(PYTHON) scripts/gen_secret.py $(KEY) --env-file $(ENV_FILE)
 
 up: _check_env
 	$(COMPOSE) up -d --build --wait
@@ -48,22 +55,28 @@ down: _check_env
 	$(COMPOSE) --profile ngrok --profile tools down
 
 reset: _check_env
-	@set -a && . ./.env.local && set +a && \
-		echo 'Step 1: case store reset' && \
-		$(COMPOSE) exec -T case_api python -m services.case_api.reset || \
-		(echo 'reset failed at step 1 (case_api)' >&2; exit 1) && \
+	@set -a && . ./$(ENV_FILE) && set +a; \
+	{ \
+		echo 'Step 1: case store reset'; \
+		$(COMPOSE) exec -T case_api python -m services.case_api.reset && \
 		$(COMPOSE) restart case_api && \
-		$(COMPOSE) up -d --wait case_api && \
-		echo 'Step 2: mock soar reset' && \
-		curl -sf -X POST "$$PUBLIC_BASE_URL/soar/v1/reset" -H 'content-type: application/json' -d '{}' || \
-		(echo 'reset failed at step 2 (mock_soar)' >&2; exit 1) && \
-		echo 'Step 3: mock splunk reset' && \
-		curl -sf -X POST "$$PUBLIC_BASE_URL/splunk/v1/reset" -H 'content-type: application/json' -d '{}' || \
-		(echo 'reset failed at step 3 (mock_splunk)' >&2; exit 1) && \
-		$(MAKE) health
+		$(COMPOSE) up -d --wait case_api; \
+	} || { echo 'reset failed at step 1 (case_api)' >&2; exit 1; }; \
+	{ \
+		echo 'Step 2: mock soar reset'; \
+		curl -sf -X POST "$$PUBLIC_BASE_URL/soar/v1/reset" -H 'content-type: application/json' -d '{}'; \
+	} || { echo 'reset failed at step 2 (mock_soar)' >&2; exit 1; }; \
+	{ \
+		echo 'Step 3: mock splunk reset'; \
+		curl -sf -X POST "$$PUBLIC_BASE_URL/splunk/v1/reset" -H 'content-type: application/json' -d '{}'; \
+	} || { echo 'reset failed at step 3 (mock_splunk)' >&2; exit 1; }; \
+	$(MAKE) health
 
 health: _check_env
-	@set -a && . ./.env.local && set +a && $(PYTHON) scripts/health.py
+	@_hts="$(HEALTH_TIMEOUT_S)"; \
+	set -a && . ./$(ENV_FILE) && set +a; \
+	[ -n "$$_hts" ] && export HEALTH_TIMEOUT_S="$$_hts"; \
+	$(PYTHON) scripts/health.py
 
 triage-seed: _check_env
 	@COMPOSE_PROGRESS=quiet $(COMPOSE) --profile tools run --rm -T triage

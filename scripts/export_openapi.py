@@ -14,6 +14,7 @@ from typing import Any, Literal, Never
 
 from services.case_api.app import create_app as create_case_app
 from services.case_api.store import Store
+from services.mcp_adapter.analyst_server import build_analyst_mcp_server
 from services.mcp_adapter.config import AdapterConfig
 from services.mcp_adapter.server import build_mcp_server
 from services.mock_soar.app import create_app as create_soar_app
@@ -30,6 +31,7 @@ SPECS: dict[str, str] = {
 }
 
 MCP_TOOLS_PATH = "contracts/mcp_tools.json"
+MCP_ANALYST_TOOLS_PATH = "contracts/mcp_analyst_tools.json"
 
 
 def _case_api_openapi() -> str:
@@ -60,12 +62,25 @@ def _mock_soar_openapi() -> str:
 
 
 async def _mcp_tools_payload() -> list[dict[str, Any]]:
-    config = AdapterConfig(
-        case_api_url="http://127.0.0.1:8000",
-        adapter_token=None,
-        actor_allowlist=None,
-    )
+    config = AdapterConfig()
     mcp = build_mcp_server(config)
+    tools = await mcp.list_tools()
+    items: list[dict[str, Any]] = []
+    for tool in tools:
+        items.append(
+            {
+                "name": tool.name,
+                "description": tool.description or "",
+                "inputSchema": tool.inputSchema,
+            }
+        )
+    items.sort(key=lambda item: str(item["name"]))
+    return items
+
+
+async def _mcp_analyst_tools_payload() -> list[dict[str, Any]]:
+    config = AdapterConfig()
+    mcp = build_analyst_mcp_server(config)
     tools = await mcp.list_tools()
     items: list[dict[str, Any]] = []
     for tool in tools:
@@ -85,6 +100,11 @@ def _mcp_tools_json() -> str:
     return json.dumps(payload, indent=2) + "\n"
 
 
+def _mcp_analyst_tools_json() -> str:
+    payload = asyncio.run(_mcp_analyst_tools_payload())
+    return json.dumps(payload, indent=2) + "\n"
+
+
 def canonical_openapi(spec_name: str) -> str:
     name = _as_spec_name(spec_name)
     match name:
@@ -101,6 +121,10 @@ def canonical_openapi(spec_name: str) -> str:
 
 def canonical_mcp_tools() -> str:
     return _mcp_tools_json()
+
+
+def canonical_mcp_analyst_tools() -> str:
+    return _mcp_analyst_tools_json()
 
 
 def _as_spec_name(value: str) -> SpecName:
@@ -134,11 +158,13 @@ def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     generated = {name: canonical_openapi(name) for name in SPECS}
     tools = canonical_mcp_tools()
+    analyst_tools = canonical_mcp_analyst_tools()
     if "--check" in args:
         ok = True
         for name, relative in SPECS.items():
             ok = _check(relative, generated[name], label="OpenAPI drift") and ok
         ok = _check(MCP_TOOLS_PATH, tools, label="MCP tools drift") and ok
+        ok = _check(MCP_ANALYST_TOOLS_PATH, analyst_tools, label="MCP analyst tools drift") and ok
         return 0 if ok else 1
     for name, relative in SPECS.items():
         path = ROOT / relative
@@ -148,6 +174,9 @@ def main(argv: list[str] | None = None) -> int:
     tools_path = ROOT / MCP_TOOLS_PATH
     tools_path.write_text(tools, encoding="utf-8")
     print(f"wrote {tools_path}")
+    analyst_path = ROOT / MCP_ANALYST_TOOLS_PATH
+    analyst_path.write_text(analyst_tools, encoding="utf-8")
+    print(f"wrote {analyst_path}")
     return 0
 
 

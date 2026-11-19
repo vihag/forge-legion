@@ -85,10 +85,19 @@ class DispositionCreate(APIModel):
     actor: Actor
 
 
+class DecisionSource(APIModel):
+    channel: Literal["grok_bot_chat"]
+    chat_ref: str = Field(min_length=1, max_length=200)
+    message_ref: str | None = Field(default=None, max_length=200)
+    instruction_text: str = Field(min_length=1, max_length=2000)
+    relayed_by: str = Field(min_length=1, max_length=100)
+
+
 class DecisionCreate(APIModel):
     decision: DecisionValue
     rationale: str = Field(min_length=1)
     actor: Actor
+    source: DecisionSource | None = None
 
 
 class SoarSubmitRequest(APIModel):
@@ -193,6 +202,9 @@ class AuditEvent(APIModel):
 
 class CaseView(APIModel):
     id: int
+    alert_id: str
+    created_at: str
+    updated_at: str
     title: str
     severity: Severity
     splunk_severity: Severity

@@ -77,3 +77,15 @@ def test_unknown_grok_client_exits_2(
     captured = capsys.readouterr()
     assert code == 2
     assert "unknown GROK_CLIENT" in captured.err
+
+
+def test_unknown_grok_client_with_api_key_still_exits_2(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("GROK_CLIENT", "bogus")
+    monkeypatch.setenv("XAI_API_KEY", "test-key-should-not-matter")
+    code = triage_cli.main(["run", "--alert-id", ALERT_ID])
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "unknown GROK_CLIENT" in captured.err

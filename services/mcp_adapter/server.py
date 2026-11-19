@@ -17,6 +17,7 @@ from services.mcp_adapter.case_client import (
     mcp_actor,
 )
 from services.mcp_adapter.config import AdapterConfig
+from services.mcp_adapter.splunk_client import SplunkClient, SplunkHttpError, SplunkUnreachable
 
 _ACTOR_RE = re.compile(MCP_ACTOR_ID_PATTERN)
 
@@ -46,6 +47,37 @@ def _map_unreachable() -> CallToolResult:
             "status": 503,
             "error": "case_api_unavailable",
             "message": "Case API is unreachable",
+            "details": {},
+        }
+    )
+
+
+def _map_splunk_error(exc: SplunkHttpError) -> CallToolResult:
+    if exc.status == 404:
+        return _tool_error(
+            {
+                "status": 404,
+                "error": "not_found",
+                "message": exc.body.get("message", "not found"),
+                "details": exc.body.get("details", {}),
+            }
+        )
+    return _tool_error(
+        {
+            "status": exc.status,
+            "error": exc.body.get("error", "error"),
+            "message": exc.body.get("message", ""),
+            "details": exc.body.get("details", {}),
+        }
+    )
+
+
+def _map_splunk_unreachable() -> CallToolResult:
+    return _tool_error(
+        {
+            "status": 503,
+            "error": "splunk_unreachable",
+            "message": "Mock Splunk is unreachable",
             "details": {},
         }
     )
@@ -86,8 +118,14 @@ def _run(call: Any) -> CallToolResult:
 def build_mcp_server(
     config: AdapterConfig,
     case_client: CaseApiClient | None = None,
+    splunk_client: SplunkClient | None = None,
 ) -> FastMCP:
     client = case_client if case_client is not None else CaseApiClient(config.case_api_url)
+    splunk = (
+        splunk_client
+        if splunk_client is not None
+        else SplunkClient(config.splunk_url)
+    )
     mcp = FastMCP("FORGE Case MCP", json_response=True)
 
     @mcp.tool()
@@ -194,5 +232,42 @@ def build_mcp_server(
         if denied is not None:
             return denied
         return _run(lambda: client.request_soar_action(case_id, actor=mcp_actor(actor_id)))
+
+    @mcp.tool()
+    def get_alert(alert_id: str) -> CallToolResult:
+        """Fetch a Mock Splunk alert by id."""
+        try:
+            return _tool_ok(splunk.get_alert(alert_id))
+        except SplunkHttpError as exc:
+            return _map_splunk_error(exc)
+        except SplunkUnreachable:
+            return _map_splunk_unreachable()
+
+    @mcp.tool()
+    def list_alert_evidence(alert_id: str, source: str | None = None) -> CallToolResult:
+        """List evidence linked to an alert."""
+        try:
+            return _tool_ok(splunk.list_alert_evidence(alert_id, source=source))
+        except SplunkHttpError as exc:
+            return _map_splunk_error(exc)
+        except SplunkUnreachable:
+            return _map_splunk_unreachable()
+
+    @mcp.tool()
+    def search_evidence(
+        source: str,
+        start: str,
+        end: str,
+        entity: str | None = None,
+    ) -> CallToolResult:
+        """Search Mock Splunk evidence in a time window."""
+        try:
+            return _tool_ok(
+                splunk.search_evidence(source=source, start=start, end=end, entity=entity)
+            )
+        except SplunkHttpError as exc:
+            return _map_splunk_error(exc)
+        except SplunkUnreachable:
+            return _map_splunk_unreachable()
 
     return mcp
