@@ -67,7 +67,7 @@ jobs:
       - name: Prepare env
         run: |
           cp .env.example .env.local
-          echo "GROK_CLIENT=fixture" >> .env.local
+          printf '\nGROK_CLIENT=fixture\n' >> .env.local
       - name: Compose up and health
         run: |
           make up
