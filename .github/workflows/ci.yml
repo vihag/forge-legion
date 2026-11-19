@@ -95,7 +95,7 @@ jobs:
       - name: Triage seed
         run: |
           set -o pipefail
-          docker compose --env-file .env.local -f deploy/compose.yml --profile tools run --rm -T \
+          COMPOSE_PROGRESS=quiet docker compose --env-file .env.local -f deploy/compose.yml --profile tools run --rm -T \
             -e GROK_FIXTURE_PATH=/app/tests/triage/fixtures/grok_seed_ok.json \
             triage 2>triage.stderr | tee triage.json || { cat triage.stderr; exit 1; }
           python scripts/assert_seed_triaged.py triage.json
