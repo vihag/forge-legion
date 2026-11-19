@@ -12,13 +12,14 @@ from contracts.models import Actor
 from services.case_api.app import create_app as create_case_app
 from services.mock_splunk.app import create_app as create_splunk_app
 from services.mock_splunk.store import SplunkStore
+from tests.mock_splunk.conftest import fixed_clock
 
 ACTOR = Actor(id="splunk-watcher", type="system")
 ALERT_ID = "SPL-2026-0001"
 
 
 def test_alert_maps_to_valid_case_create() -> None:
-    alert = SplunkStore().get_alert(ALERT_ID)
+    alert = SplunkStore(clock=fixed_clock).get_alert(ALERT_ID)
     created = alert_to_case_create(alert, ACTOR)
     assert created.alert_id == alert.alert_id
     assert created.title == alert.title
@@ -40,7 +41,8 @@ def test_alert_maps_to_valid_case_create() -> None:
 
 def test_evidence_maps_ref_to_evidence_id() -> None:
     evidence = next(
-        item for item in SplunkStore().loaded_evidence() if item.evidence_id == "EV-AUTH-0003"
+        item for item in SplunkStore(clock=fixed_clock).loaded_evidence()
+        if item.evidence_id == "EV-AUTH-0003"
     )
     created = evidence_to_evidence_create(evidence, ACTOR)
     assert created.source == "auth"

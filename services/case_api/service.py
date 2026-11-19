@@ -821,6 +821,7 @@ class CaseService:
         by_route = {"autonomous": 0, "collaborative": 0, "review": 0}
         auto_resolved = 0
         collaborative_open = 0
+        with_legion_open = 0
         needs_review = 0
         uplifts: dict[str, int] = {}
         downgrades = 0
@@ -833,6 +834,8 @@ class CaseService:
                 auto_resolved += 1
             if case.status == CaseStatus.TRIAGED and case.route == "collaborative":
                 collaborative_open += 1
+            if case.status == CaseStatus.TRIAGED and case.route in ("collaborative", "autonomous"):
+                with_legion_open += 1
             if case.status == CaseStatus.NEEDS_REVIEW:
                 needs_review += 1
             if case.triage_severity is not None:
@@ -940,6 +943,7 @@ class CaseService:
                 by_route=by_route,
                 auto_resolved=auto_resolved,
                 collaborative_open=collaborative_open,
+                with_legion_open=with_legion_open,
                 needs_review=needs_review,
             ),
             uplifts=uplifts,

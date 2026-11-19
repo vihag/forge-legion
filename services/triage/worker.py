@@ -6,7 +6,10 @@ import logging
 import os
 import sys
 import time
+from typing import Literal
 
+from contracts.models import Case, CaseStatus
+from contracts.triage import TriageResult
 from services.triage.clients import AlertNotFound, CaseApiClient, SplunkClient
 from services.triage.config import TriageSettings, load_settings
 from services.triage.graph import TriageDeps, run_triage
@@ -19,6 +22,8 @@ from services.triage.grok import (
 from services.triage.webhook import RoutineWebhook, WebhookPayload
 
 logger = logging.getLogger(__name__)
+
+WebhookState = Literal["sent", "skipped", "disabled"]
 
 
 def _resolve_grok_client(settings: TriageSettings) -> GrokClient:
@@ -52,7 +57,61 @@ def _validate_concurrency() -> int:
     return value
 
 
+def _gate_label(case: Case, result: TriageResult) -> str:
+    if result.route != "autonomous":
+        return "pass"
+    if case.status == CaseStatus.AUTO_RESOLVED:
+        return "pass"
+    rule = case.rule or result.rule or "unknown"
+    return f"fail:{rule}"
+
+
+def _webhook_payload(case: Case, case_id: int) -> WebhookPayload:
+    triage_sev = case.triage_severity
+    splunk_sev = case.splunk_severity
+    severity = triage_sev if triage_sev is not None else splunk_sev
+    route = case.route if case.route is not None else "collaborative"
+    rule = case.rule or ""
+    return WebhookPayload(
+        case_id=case_id,
+        alert_id=case.alert_id,
+        severity=severity,
+        route=route,
+        rule=rule,
+    )
+
+
+def handle_triage_result(
+    *,
+    webhook: RoutineWebhook | None,
+    case_client: CaseApiClient,
+    result: TriageResult,
+) -> tuple[str, str, WebhookState]:
+    """Apply webhook rules for one triage outcome. Returns route, gate, webhook state."""
+    route = result.route or "—"
+    gate = "—"
+    webhook_state: WebhookState = "disabled" if webhook is None else "skipped"
+    if result.case_id is None or result.outcome == "skipped_existing":
+        return route, gate, webhook_state
+    case = case_client.get_case(result.case_id)
+    route = case.route if case.route is not None else route
+    gate = _gate_label(case, result)
+    if webhook is None:
+        return route, gate, "disabled"
+    if case.status != CaseStatus.TRIAGED:
+        return route, gate, "skipped"
+    webhook.enqueue(_webhook_payload(case, result.case_id))
+    return route, gate, "sent"
+
+
+def configure_worker_logging() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+
 def run_worker() -> int:
+    configure_worker_logging()
     _validate_concurrency()
     poll_s = int(os.environ.get("TRIAGE_WORKER_POLL_S", "5"))
     settings = load_settings()
@@ -76,39 +135,21 @@ def run_worker() -> int:
             for alert in page.items:
                 try:
                     result = run_triage(deps, alert.alert_id)
-                    logger.info(
-                        "triage alert_id=%s outcome=%s case_id=%s",
-                        alert.alert_id,
-                        result.outcome,
-                        result.case_id,
+                    route, gate, webhook_state = handle_triage_result(
+                        webhook=webhook,
+                        case_client=case_client,
+                        result=result,
                     )
-                    if (
-                        webhook is not None
-                        and result.case_id is not None
-                        and result.outcome != "skipped_existing"
-                    ):
-                        case = case_client.get_case(result.case_id)
-                        if case.status.value == "TRIAGED":
-                            triage_sev = case.triage_severity
-                            splunk_sev = case.splunk_severity
-                            severity = (
-                                triage_sev
-                                if triage_sev is not None
-                                else splunk_sev
-                            )
-                            route = case.route if case.route is not None else "collaborative"
-                            rule = case.rule or ""
-                            webhook.enqueue(
-                                WebhookPayload(
-                                    case_id=result.case_id,
-                                    alert_id=case.alert_id,
-                                    severity=severity,
-                                    route=route,
-                                    rule=rule,
-                                )
-                            )
+                    logger.info(
+                        "alert_id=%s case_id=%s route=%s gate=%s webhook=%s",
+                        alert.alert_id,
+                        result.case_id,
+                        route,
+                        gate,
+                        webhook_state,
+                    )
                 except AlertNotFound:
-                    logger.warning("alert missing during triage: %s", alert.alert_id)
+                    logger.warning("alert missing during triage alert_id=%s", alert.alert_id)
             after_seq = page.next_after_seq
             time.sleep(poll_s)
     except KeyboardInterrupt:

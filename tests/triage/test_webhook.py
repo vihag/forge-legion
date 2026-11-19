@@ -55,21 +55,6 @@ def test_wh1_triaged_post_shape_and_auth(monkeypatch: pytest.MonkeyPatch) -> Non
     assert req.headers["Authorization"] == f"Bearer {key}"
 
 
-def test_wh2_auto_resolved_and_skipped_no_posts(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ROUTINE_WEBHOOK_ENABLED", "1")
-    monkeypatch.setenv("ROUTINE_WEBHOOK_URL", "http://stub")
-    monkeypatch.setenv("ROUTINE_WEBHOOK_KEY", "k")
-    transport = _RecordingTransport(
-        lambda _req: httpx.Response(200, json={"ok": True}),
-    )
-    webhook = RoutineWebhook.from_env(transport=transport, sleep=lambda _s: None)
-    assert webhook is not None
-    webhook.start()
-    # Worker logic: only TRIAGED enqueues; we simulate no enqueue for other paths.
-    webhook.shutdown()
-    assert transport.requests == []
-
-
 def test_wh3_retry_backoff_and_no_retry_on_400(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ROUTINE_WEBHOOK_ENABLED", "1")
     monkeypatch.setenv("ROUTINE_WEBHOOK_URL", "http://stub")

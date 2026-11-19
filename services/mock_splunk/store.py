@@ -204,6 +204,29 @@ def _load_fixtures(fixtures_dir: Path) -> _LoadedSeed:
     return _LoadedSeed(seed_version, alerts, evidence)
 
 
+_SEED_HERO_ALERT_ID = "SPL-2026-0001"
+
+
+def _restamp_seed_hero(loaded: _LoadedSeed, now: datetime) -> _LoadedSeed:
+    hero = next((alert for alert in loaded.alerts if alert.alert_id == _SEED_HERO_ALERT_ID), None)
+    if hero is None:
+        return loaded
+    shift = now - hero.triggered_at
+    alerts = [
+        alert.model_copy(update={"triggered_at": now, "emitted_at": now})
+        if alert.alert_id == _SEED_HERO_ALERT_ID
+        else alert
+        for alert in loaded.alerts
+    ]
+    evidence = [
+        row.model_copy(update={"timestamp": row.timestamp + shift})
+        if _SEED_HERO_ALERT_ID in row.alert_ids
+        else row
+        for row in loaded.evidence
+    ]
+    return _LoadedSeed(loaded.seed_version, alerts, evidence)
+
+
 def _evidence_key(item: SplunkEvidence) -> tuple[datetime, str]:
     return (item.timestamp, item.evidence_id)
 
@@ -294,6 +317,7 @@ class SplunkStore:
         if self._stream_engine is not None:
             self._stream_engine.stop()
         loaded = _load_fixtures(self._fixtures_dir)
+        loaded = _restamp_seed_hero(loaded, _aware_clock(self._clock()))
         self._seed_version = loaded.seed_version
         self._alerts = {alert.alert_id: alert for alert in loaded.alerts}
         self._order = [alert.alert_id for alert in loaded.alerts]

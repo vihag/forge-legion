@@ -70,10 +70,15 @@ def test_t2_ticket_guards(client: TestClient) -> None:
     assert forbidden.status_code == 403
 
 
-def test_g1_get_case_include_and_validation(client: TestClient) -> None:
+def test_g1_get_case_default_uses_view_and_include_is_case_based(client: TestClient) -> None:
     case_id = _approved_case(client)
-    base_keys = set(client.get(f"/v1/cases/{case_id}").json().keys())
-    assert base_keys == set(client.get(f"/v1/cases/{case_id}").json().keys())
+    view = client.get(f"/v1/cases/{case_id}/view").json()
+    transport = InProcessTransport(client.app)
+    api = CaseApiClient("http://case.test", transport=transport)
+    assert api.get_case(case_id) == view
+    slim = client.get(f"/v1/cases/{case_id}", params={"include": "audit", "audit_limit": 3}).json()
+    case_only = client.get(f"/v1/cases/{case_id}").json()
+    assert set(slim.keys()) - set(case_only.keys()) == {"audit"}
     audit = client.get(f"/v1/cases/{case_id}", params={"include": "audit", "audit_limit": 3})
     assert audit.status_code == 200
     assert len(audit.json()["audit"]) <= 3

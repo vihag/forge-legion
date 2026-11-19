@@ -80,6 +80,7 @@ function applyMetrics(metrics) {
   setField("counts.total", metrics.counts.total);
   setField("counts.auto_resolved", metrics.counts.auto_resolved);
   setField("counts.collaborative_open", metrics.counts.collaborative_open);
+  setField("counts.with_legion_open", metrics.counts.with_legion_open);
   setField("counts.needs_review", metrics.counts.needs_review);
   renderUplifts(metrics.uplifts);
 

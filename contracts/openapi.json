@@ -2817,6 +2817,11 @@
             "minimum": 0.0,
             "title": "Collaborative Open"
           },
+          "with_legion_open": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "With Legion Open"
+          },
           "needs_review": {
             "type": "integer",
             "minimum": 0.0,
@@ -2831,6 +2836,7 @@
           "by_route",
           "auto_resolved",
           "collaborative_open",
+          "with_legion_open",
           "needs_review"
         ],
         "title": "MetricsCounts"

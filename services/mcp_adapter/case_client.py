@@ -131,7 +131,9 @@ class CaseApiClient:
             params["include"] = ",".join(include)
         if audit_limit is not None:
             params["audit_limit"] = audit_limit
-        return self._request_dict("GET", f"/v1/cases/{case_id}", params=params or None)
+        if params:
+            return self._request_dict("GET", f"/v1/cases/{case_id}", params=params)
+        return self._request_dict("GET", f"/v1/cases/{case_id}/view")
 
     def create_incident_ticket(
         self,

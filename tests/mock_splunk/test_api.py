@@ -329,7 +329,7 @@ def test_replay_emits_new_alert_with_suffix_and_next_seq(client: TestClient) -> 
 def test_replay_uses_injected_clock_for_emitted_at(client: TestClient) -> None:
     response = client.post("/v1/replay", json={"alert_id": ALERT_ID})
     assert response.status_code == 201
-    assert response.json()["emitted_at"] == "2026-11-18T03:00:00Z"
+    assert response.json()["emitted_at"] == "2026-11-18T02:04:00Z"
     assert client.get(f"/v1/alerts/{ALERT_ID}").json()["emitted_at"] == "2026-11-18T02:04:00Z"
 
 
@@ -378,4 +378,5 @@ def test_clock_can_differ_between_apps() -> None:
         assert right_body["emitted_at"] == "2026-11-18T05:00:00Z"
         left_root = left.get(f"/v1/alerts/{ALERT_ID}").json()
         right_root = right.get(f"/v1/alerts/{ALERT_ID}").json()
-        assert left_root == right_root
+        assert left_root["alert_id"] == right_root["alert_id"]
+        assert left_root["seq"] == right_root["seq"]

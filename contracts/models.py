@@ -301,6 +301,7 @@ class MetricsCounts(APIModel):
     by_route: dict[str, int]
     auto_resolved: int = Field(ge=0)
     collaborative_open: int = Field(ge=0)
+    with_legion_open: int = Field(ge=0)
     needs_review: int = Field(ge=0)
 
 
