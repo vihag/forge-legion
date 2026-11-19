@@ -4,7 +4,14 @@ import pytest
 
 from services.mcp_adapter.config import load_allowed_hosts
 
-DEFAULTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+DEFAULTS = [
+    "127.0.0.1",
+    "127.0.0.1:*",
+    "localhost",
+    "localhost:*",
+    "[::1]",
+    "[::1]:*",
+]
 
 
 @pytest.fixture(autouse=True)
@@ -19,7 +26,7 @@ def test_allowed_hosts_defaults_when_unset() -> None:
 def test_allowed_hosts_extras_are_added_not_replacing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MCP_ALLOWED_HOSTS", "a.example")
     hosts = load_allowed_hosts()
-    assert hosts[:3] == DEFAULTS
+    assert hosts[: len(DEFAULTS)] == DEFAULTS
     assert "a.example" in hosts
     assert "a.example:*" in hosts
 
@@ -37,4 +44,4 @@ def test_blank_entries_ignored_and_deduped(monkeypatch: pytest.MonkeyPatch) -> N
     assert hosts.count("a.example") == 1
     assert "b.example" in hosts
     assert "b.example:*" in hosts
-    assert hosts[0:3] == DEFAULTS
+    assert hosts[0 : len(DEFAULTS)] == DEFAULTS

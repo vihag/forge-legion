@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from scripts.health import CheckResult, FetchResult, main, run_checks
+from scripts.health import CheckResult, FetchResult, main, resolve_timeout, run_checks
 
 
 def _fetch_factory(responses: dict[str, FetchResult]):
@@ -38,7 +38,7 @@ def test_all_ok_exits_0(
         ]
 
     monkeypatch.setattr("scripts.health.run_checks", _all_ok)
-    code = main()
+    code = main([])
     assert code == 0
     out = capsys.readouterr().out
     assert out.count("PASS") == 6
@@ -72,7 +72,7 @@ def test_one_service_down_exits_1_and_names_it(
         ]
 
     monkeypatch.setattr("scripts.health.run_checks", _soar_down)
-    code = main()
+    code = main([])
     assert code == 1
     assert calls > 0
     err = capsys.readouterr().out
@@ -93,6 +93,13 @@ def test_mcp_redirect_counts_as_failure() -> None:
     mcp_init = results[-1]
     assert mcp_init[0] == "mcp_init"
     assert mcp_init[1] is False
+
+
+def test_b7_health_timeout_precedence() -> None:
+    assert resolve_timeout(cli_flag=2.0, env_value="5", file_value="60") == 2.0
+    assert resolve_timeout(cli_flag=None, env_value="5", file_value="60") == 5.0
+    assert resolve_timeout(cli_flag=None, env_value=None, file_value="60") == 60.0
+    assert resolve_timeout(cli_flag=None, env_value=None, file_value=None) == 60.0
 
 
 def test_sends_bearer_when_token_set() -> None:

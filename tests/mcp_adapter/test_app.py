@@ -68,6 +68,57 @@ def test_unknown_host_header_rejected() -> None:
         assert response.status_code >= 400
 
 
+def test_bare_localhost_host_accepted() -> None:
+    with _client() as client:
+        response = client.post(
+            "/mcp",
+            json=INIT_PAYLOAD,
+            headers={**MCP_HEADERS, "Host": "localhost"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 200
+        response_port = client.post(
+            "/mcp",
+            json=INIT_PAYLOAD,
+            headers={**MCP_HEADERS, "Host": "localhost:8080"},
+            follow_redirects=False,
+        )
+        assert response_port.status_code == 200
+
+
+def test_evil_host_still_rejected() -> None:
+    with _client() as client:
+        response = client.post(
+            "/mcp",
+            json=INIT_PAYLOAD,
+            headers={**MCP_HEADERS, "Host": "evil.example"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 421
+
+
+def test_public_header_without_token_returns_503() -> None:
+    config = AdapterConfig(adapter_token=None)
+    app = create_app(config=config, case_client=CaseApiClient("http://127.0.0.1:8000"))
+    with TestClient(app, base_url="http://127.0.0.1:8003") as client:
+        response = client.get("/healthz", headers={"X-Forge-Public": "1"})
+        assert response.status_code == 503
+        assert response.json() == {"code": "public_requires_token"}
+
+
+def test_public_header_with_token_and_bearer_ok() -> None:
+    config = AdapterConfig(adapter_token="secret-token")
+    app = create_app(config=config, case_client=CaseApiClient("http://127.0.0.1:8000"))
+    headers = {
+        **MCP_HEADERS,
+        "Authorization": "Bearer secret-token",
+        "X-Forge-Public": "1",
+    }
+    with TestClient(app, base_url="http://127.0.0.1:8003") as client:
+        response = client.post("/mcp", json=INIT_PAYLOAD, headers=headers, follow_redirects=False)
+        assert response.status_code == 200
+
+
 def test_healthz_route_ok_and_not_a_tool(mcp_session: object) -> None:
     with _client() as client:
         health = client.get("/healthz")

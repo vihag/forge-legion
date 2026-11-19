@@ -45,6 +45,11 @@ class DomainValidationError(CaseError):
     error = "validation_error"
 
 
+class InstructionMismatch(CaseError):
+    status_code = 422
+    error = "instruction_mismatch"
+
+
 class SoarUnavailable(CaseError):
     status_code = 502
     error = "soar_unavailable"

@@ -1,0 +1,65 @@
+[
+  {
+    "name": "record_analyst_decision",
+    "description": "Record an analyst approve/reject from chat with provenance.",
+    "inputSchema": {
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "integer"
+        },
+        "decision": {
+          "enum": [
+            "approve",
+            "reject"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "analyst_id": {
+          "title": "Analyst Id",
+          "type": "string"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        },
+        "chat_ref": {
+          "title": "Chat Ref",
+          "type": "string"
+        },
+        "instruction_text": {
+          "title": "Instruction Text",
+          "type": "string"
+        },
+        "relayed_by": {
+          "title": "Relayed By",
+          "type": "string"
+        },
+        "message_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message Ref"
+        }
+      },
+      "required": [
+        "case_id",
+        "decision",
+        "analyst_id",
+        "rationale",
+        "chat_ref",
+        "instruction_text",
+        "relayed_by"
+      ],
+      "title": "record_analyst_decisionArguments",
+      "type": "object"
+    }
+  }
+]

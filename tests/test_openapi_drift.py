@@ -4,7 +4,12 @@ import json
 from pathlib import Path
 
 import pytest
-from scripts.export_openapi import SPECS, canonical_mcp_tools, canonical_openapi
+from scripts.export_openapi import (
+    SPECS,
+    canonical_mcp_analyst_tools,
+    canonical_mcp_tools,
+    canonical_openapi,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -75,3 +80,8 @@ def test_committed_openapi_matches_app(spec_name: str) -> None:
 def test_committed_mcp_tools_match_server() -> None:
     committed = (ROOT / "contracts" / "mcp_tools.json").read_text(encoding="utf-8")
     assert canonical_mcp_tools() == committed
+
+
+def test_committed_mcp_analyst_tools_match_server() -> None:
+    committed = (ROOT / "contracts" / "mcp_analyst_tools.json").read_text(encoding="utf-8")
+    assert canonical_mcp_analyst_tools() == committed

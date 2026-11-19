@@ -18,6 +18,7 @@ from contracts.models import (
     CaseView,
     Decision,
     DecisionCreate,
+    DecisionSource,
     DecisionValue,
     Disposition,
     DispositionCreate,
@@ -39,6 +40,7 @@ from services.case_api.errors import (
     Duplicate,
     Forbidden,
     IllegalTransition,
+    InstructionMismatch,
     NotFound,
     SoarUnavailable,
 )
@@ -96,6 +98,33 @@ def _decision_effect(decision: DecisionValue) -> tuple[str, str]:
             return APPROVE, EVENT_APPROVED
         case "reject":
             return REJECT, EVENT_REJECTED
+        case _ as unreachable:
+            never_decision: Never = unreachable
+            raise RuntimeError(f"unhandled decision {never_decision}")
+
+
+def _decision_audit_payload(
+    *,
+    decision_id: int,
+    disposition_id: int,
+    source: DecisionSource | None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "decision_id": decision_id,
+        "disposition_id": disposition_id,
+    }
+    if source is not None:
+        payload["source"] = source.model_dump(mode="json")
+    return payload
+
+
+def _instruction_matches_decision(source: DecisionSource, decision: DecisionValue) -> bool:
+    text = source.instruction_text.casefold()
+    match decision:
+        case "approve":
+            return "approve" in text
+        case "reject":
+            return "reject" in text
         case _ as unreachable:
             never_decision: Never = unreachable
             raise RuntimeError(f"unhandled decision {never_decision}")
@@ -313,6 +342,13 @@ class CaseService:
                     "only an analyst may approve or reject a disposition",
                     details={"actor_type": body.actor.type},
                 )
+            if body.source is not None and not _instruction_matches_decision(
+                body.source, body.decision
+            ):
+                raise InstructionMismatch(
+                    "instruction_text must contain the decision word",
+                    details={"decision": body.decision},
+                )
             to_status = self._require_transition(operation, case.status)
             disposition = self._require_open_disposition(conn, case_id)
             decision = self._store.insert_decision(
@@ -333,7 +369,11 @@ class CaseService:
                 actor=body.actor,
                 from_status=case.status.value,
                 to_status=to_status.value,
-                payload={"decision_id": decision.id, "disposition_id": disposition.id},
+                payload=_decision_audit_payload(
+                    decision_id=decision.id,
+                    disposition_id=disposition.id,
+                    source=body.source,
+                ),
             )
             return decision
 
@@ -469,6 +509,9 @@ class CaseService:
             )
             return CaseView(
                 id=case.id,
+                alert_id=case.alert_id,
+                created_at=case.created_at,
+                updated_at=case.updated_at,
                 title=case.title,
                 severity=severity,
                 splunk_severity=case.splunk_severity,

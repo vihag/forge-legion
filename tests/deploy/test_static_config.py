@@ -66,7 +66,7 @@ def test_no_literal_urls_or_hosts_in_compose_or_nginx() -> None:
 
 def test_env_example_secrets_are_empty() -> None:
     lines = ENV_EXAMPLE.read_text(encoding="utf-8").splitlines()
-    secrets = {"XAI_API_KEY", "MCP_ADAPTER_TOKEN", "NGROK_AUTHTOKEN"}
+    secrets = {"XAI_API_KEY", "MCP_ADAPTER_TOKEN", "MCP_ANALYST_TOKEN", "NGROK_AUTHTOKEN"}
     values = dict(line.split("=", 1) for line in lines if "=" in line)
     for key in secrets:
         assert values.get(key) == "", key
@@ -96,6 +96,10 @@ def test_nginx_routes_cover_all_prefixes() -> None:
         "= /mcp",
         "location /mcp/",
         "= /mcp/healthz",
+        "= /mcp-analyst",
+        "location /mcp-analyst/",
+        "listen ${PUBLIC_GATEWAY_PORT}",
+        "X-Forge-Public",
     ):
         assert needle in text
 
@@ -122,6 +126,18 @@ def test_up_public_and_compose_read_tokens_from_env_local() -> None:
     assert "NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN?}" in compose_text
     assert "../${ENV_FILE:-.env.local}" in compose_text
     assert "ENV_FILE ?=" in makefile
+
+
+def test_compose_healthchecks_use_healthcheck_module() -> None:
+    text = COMPOSE.read_text(encoding="utf-8")
+    assert 'python", "-m", "services.healthcheck"' in text
+    assert "http'+'://" not in text
+
+
+def test_ngrok_targets_public_gateway_port() -> None:
+    text = COMPOSE.read_text(encoding="utf-8")
+    assert "nginx:${PUBLIC_GATEWAY_PORT}" in text
+    assert "nginx:${GATEWAY_PORT}" not in text.split("ngrok:")[1].split("volumes:")[0]
 
 
 def test_ngrok_service_only_in_ngrok_profile_and_uses_env_domain() -> None:

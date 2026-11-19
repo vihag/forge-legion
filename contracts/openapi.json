@@ -105,7 +105,7 @@
             }
           },
           "422": {
-            "description": "Validation error",
+            "description": "Validation error or instruction mismatch",
             "content": {
               "application/json": {
                 "schema": {
@@ -154,7 +154,7 @@
             }
           },
           "422": {
-            "description": "Validation error",
+            "description": "Validation error or instruction mismatch",
             "content": {
               "application/json": {
                 "schema": {
@@ -206,7 +206,7 @@
             }
           },
           "422": {
-            "description": "Validation error",
+            "description": "Validation error or instruction mismatch",
             "content": {
               "application/json": {
                 "schema": {
@@ -278,7 +278,7 @@
             }
           },
           "422": {
-            "description": "Validation error",
+            "description": "Validation error or instruction mismatch",
             "content": {
               "application/json": {
                 "schema": {
@@ -350,7 +350,7 @@
             }
           },
           "422": {
-            "description": "Validation error",
+            "description": "Validation error or instruction mismatch",
             "content": {
               "application/json": {
                 "schema": {
@@ -406,7 +406,7 @@
             }
           },
           "422": {
-            "description": "Validation error",
+            "description": "Validation error or instruction mismatch",
             "content": {
               "application/json": {
                 "schema": {
@@ -476,7 +476,7 @@
             }
           },
           "422": {
-            "description": "Validation error",
+            "description": "Validation error or instruction mismatch",
             "content": {
               "application/json": {
                 "schema": {
@@ -548,7 +548,7 @@
             }
           },
           "422": {
-            "description": "Validation error",
+            "description": "Validation error or instruction mismatch",
             "content": {
               "application/json": {
                 "schema": {
@@ -604,7 +604,7 @@
             }
           },
           "422": {
-            "description": "Validation error",
+            "description": "Validation error or instruction mismatch",
             "content": {
               "application/json": {
                 "schema": {
@@ -676,7 +676,7 @@
             }
           },
           "422": {
-            "description": "Validation error",
+            "description": "Validation error or instruction mismatch",
             "content": {
               "application/json": {
                 "schema": {
@@ -758,7 +758,7 @@
             }
           },
           "422": {
-            "description": "Validation error",
+            "description": "Validation error or instruction mismatch",
             "content": {
               "application/json": {
                 "schema": {
@@ -830,7 +830,7 @@
             }
           },
           "422": {
-            "description": "Validation error",
+            "description": "Validation error or instruction mismatch",
             "content": {
               "application/json": {
                 "schema": {
@@ -892,7 +892,7 @@
             }
           },
           "422": {
-            "description": "Validation error",
+            "description": "Validation error or instruction mismatch",
             "content": {
               "application/json": {
                 "schema": {
@@ -964,7 +964,7 @@
             }
           },
           "422": {
-            "description": "Validation error",
+            "description": "Validation error or instruction mismatch",
             "content": {
               "application/json": {
                 "schema": {
@@ -1389,6 +1389,18 @@
             "type": "integer",
             "title": "Id"
           },
+          "alert_id": {
+            "type": "string",
+            "title": "Alert Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          },
           "title": {
             "type": "string",
             "title": "Title"
@@ -1494,6 +1506,9 @@
         "type": "object",
         "required": [
           "id",
+          "alert_id",
+          "created_at",
+          "updated_at",
           "title",
           "severity",
           "splunk_severity",
@@ -1574,6 +1589,16 @@
           },
           "actor": {
             "$ref": "#/components/schemas/Actor"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecisionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -1584,6 +1609,54 @@
           "actor"
         ],
         "title": "DecisionCreate"
+      },
+      "DecisionSource": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "const": "grok_bot_chat",
+            "title": "Channel"
+          },
+          "chat_ref": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Chat Ref"
+          },
+          "message_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Ref"
+          },
+          "instruction_text": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Instruction Text"
+          },
+          "relayed_by": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Relayed By"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "channel",
+          "chat_ref",
+          "instruction_text",
+          "relayed_by"
+        ],
+        "title": "DecisionSource"
       },
       "Disposition": {
         "properties": {

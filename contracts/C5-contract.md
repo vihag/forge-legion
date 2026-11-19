@@ -34,7 +34,7 @@ Every proxied location sets `Host $host`, `X-Forwarded-For` and `X-Forwarded-Pro
 The contract table above documents `Host $host`. The shipped nginx template uses `proxy_set_header Host $http_host` on every upstream proxy location. MCP's transport security checks match the client `Host` header including the port (e.g. `localhost:8080`). Nginx's `$host` normalizes away the port, which made gateway health's MCP `initialize` check fail with HTTP 421 (invalid host). `$http_host` passes the client's `Host` through unchanged so DNS rebinding protection accepts gateway traffic.
 
 ## 2. Compose (`deploy/compose.yml`)
-- Every service uses `env_file: ../.env.local`. Interpolation comes from `--env-file .env.local`, and `make` always passes it.
+- Every service uses `env_file: ../${ENV_FILE:-.env.local}`. Interpolation comes from `--env-file` (default `.env.local`), and `make` always passes it.
 - `case_api`, `mock_splunk`, `mock_soar` and `mcp` run `uvicorn <module>:app --host 0.0.0.0 --port ${<SVC>_PORT}`, with a healthcheck that runs `python -c` urllib against the service's own `/healthz` (interval 3s, retries 20).
 - `nginx` has `depends_on` all four with `condition: service_healthy`.
 - `mcp` gets `MCP_ALLOWED_HOSTS: "${NGROK_DOMAIN:-},${MCP_EXTRA_ALLOWED_HOSTS:-}"`, so the ngrok host is set once, in `NGROK_DOMAIN`.
@@ -47,6 +47,7 @@ The contract table above documents `Host $host`. The shipped nginx template uses
 
 ## 4. Environment (`.env.example`, committed, with every variable listed)
 ```
+ENV_FILE=.env.local
 GATEWAY_BIND=127.0.0.1
 GATEWAY_PUBLIC_PORT=8080
 GATEWAY_PORT=8080
@@ -61,6 +62,7 @@ MOCK_SOAR_UPSTREAM=mock_soar:8002
 MCP_UPSTREAM=mcp:8003
 CASE_API_URL=http://case_api:8000
 MOCK_SPLUNK_URL=http://mock_splunk:8001
+ROUTING_CONFIG=config/routing.yaml
 MOCK_SOAR_URL=http://mock_soar:8002
 SOAR_CLIENT=http
 CASE_DB_PATH=/data/cases.db
@@ -82,8 +84,8 @@ HEALTH_TIMEOUT_S=60
 - **.gitignore fix:** the current `.env.*` pattern also ignores `.env.example`. Add `!.env.example` and keep `.env.local` ignored.
 - `.dockerignore` excludes `.env*`, `data/`, `.git` and the caches.
 
-## 5. Makefile targets (`COMPOSE = docker compose --env-file .env.local -f deploy/compose.yml`)
-Every compose target first checks that `.env.local` exists, and if not exits 1 with the message `cp .env.example .env.local`.
+## 5. Makefile targets (`COMPOSE = ENV_FILE=$(ENV_FILE) docker compose --env-file $(ENV_FILE) -f deploy/compose.yml`)
+Every compose target first checks that `$(ENV_FILE)` exists (default `.env.local`), and if not exits 1 with guidance to run `make env-merge`.
 
 | Target | Does | Exit |
 |---|---|---|

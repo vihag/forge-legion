@@ -38,6 +38,23 @@
     }
   },
   {
+    "name": "get_alert",
+    "description": "Fetch a Mock Splunk alert by id.",
+    "inputSchema": {
+      "properties": {
+        "alert_id": {
+          "title": "Alert Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "alert_id"
+      ],
+      "title": "get_alertArguments",
+      "type": "object"
+    }
+  },
+  {
     "name": "get_case",
     "description": "Fetch the full case view.",
     "inputSchema": {
@@ -68,6 +85,35 @@
         "case_id"
       ],
       "title": "get_case_historyArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_alert_evidence",
+    "description": "List evidence linked to an alert.",
+    "inputSchema": {
+      "properties": {
+        "alert_id": {
+          "title": "Alert Id",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "required": [
+        "alert_id"
+      ],
+      "title": "list_alert_evidenceArguments",
       "type": "object"
     }
   },
@@ -238,6 +284,45 @@
         "actor_id"
       ],
       "title": "request_soar_actionArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "search_evidence",
+    "description": "Search Mock Splunk evidence in a time window.",
+    "inputSchema": {
+      "properties": {
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "start": {
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "title": "End",
+          "type": "string"
+        },
+        "entity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entity"
+        }
+      },
+      "required": [
+        "source",
+        "start",
+        "end"
+      ],
+      "title": "search_evidenceArguments",
       "type": "object"
     }
   }
