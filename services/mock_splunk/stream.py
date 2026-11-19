@@ -24,6 +24,7 @@ from services.mock_splunk.scenarios import (
     render_template,
     resolve_entities,
 )
+from services.mock_splunk.store import EVIDENCE_LEAD
 
 Clock = Callable[[], datetime]
 
@@ -281,6 +282,24 @@ def _entities_to_splunk(entities: dict[str, dict[str, Any]]) -> Entities:
     return Entities(user=user, hosts=hosts, src_country=src_country)
 
 
+_ENTITY_OVERRIDE_KEYS = ("src_ip", "src_country")
+
+
+def _with_field_overrides(base: Entities, fields: dict[str, Any]) -> Entities:
+    """Let a record's own ``src_ip`` / ``src_country`` win over the user's home defaults.
+
+    Without this every streamed alert and record was tagged with the user's home
+    country, so an alert that says "from RO" carried ``src_country=SG`` and an
+    entity search for the country it names found nothing.
+    """
+    updates = {
+        key: str(fields[key])
+        for key in _ENTITY_OVERRIDE_KEYS
+        if isinstance(fields.get(key), str | int | float) and str(fields[key])
+    }
+    return base.model_copy(update=updates) if updates else base
+
+
 def _emit_one(
     *,
     scenario: Scenario,
@@ -303,6 +322,13 @@ def _emit_one(
         # would push alerts into the future and make time-to-triage negative.
         triggered_at = clock()
     splunk_entities = _entities_to_splunk(entities)
+    alert_fields = {
+        key: render_template(value, entities) if isinstance(value, str) else value
+        for key, value in scenario.alert.fields.items()
+    }
+    alert_entities = Entities.model_validate(
+        _with_field_overrides(splunk_entities, alert_fields).model_dump()
+    )
     mitre = scenario.mitre_techniques or ["T1078"]
     alert = Alert(
         seq=stream_index + 1,
@@ -315,17 +341,22 @@ def _emit_one(
         triggered_at=triggered_at,
         emitted_at=triggered_at,
         replay_of=None,
-        entities=splunk_entities,
+        entities=alert_entities,
         scenario_id=scenario.id,
     )
     evidence_rows: list[SplunkEvidence] = []
     # Evidence must never post-date the alert (an analyst querying "now" would see
     # future events). Shift the whole story back so the latest record lands at the
-    # alert time; relative order and gaps between records are preserved.
+    # alert time (minus ``EVIDENCE_LEAD``, so a search ending at the alert time still
+    # returns it); relative order and gaps between records are preserved.
     latest_offset_s = max([0, *(record.offset_s for record in scenario.evidence)])
     for index, record in enumerate(scenario.evidence, start=1):
         evidence_id = f"EV-STR-{stream_index + 1:04d}-{index}"
-        timestamp = triggered_at + timedelta(seconds=record.offset_s - latest_offset_s)
+        timestamp = (
+            triggered_at
+            + timedelta(seconds=record.offset_s - latest_offset_s)
+            - EVIDENCE_LEAD
+        )
         rendered = {
             key: render_template(str(value), entities) if isinstance(value, str) else value
             for key, value in record.fields.items()
@@ -336,7 +367,9 @@ def _emit_one(
                 source=record.source,
                 timestamp=timestamp,
                 alert_ids=[alert_id],
-                entities=splunk_entities,
+                entities=Entities.model_validate(
+                    _with_field_overrides(splunk_entities, rendered).model_dump()
+                ),
                 content={"sourcetype": record.sourcetype, **rendered},
             )
         )

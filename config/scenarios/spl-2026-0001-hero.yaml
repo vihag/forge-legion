@@ -7,25 +7,61 @@ weight: 0
 mitre_techniques:
 - T1078
 - T1021
+# Same story as alert SPL-2026-0001 loaded on reset: SG baseline, RO sign-in
+# through VPN-GW-01, RDP to JMP-01, tool download, RDP to FIN-DB-01, 48 MB upload.
+# offset_s is relative to the RO sign-in; the stream shifts the whole story back so
+# the latest record lands just before the alert, keeping these gaps.
 entities:
   user:
     ref: user:adm.mtan
+  vpn:
+    ref: host:VPN-GW-01
+  jump:
+    ref: host:JMP-01
   host:
     ref: host:FIN-DB-01
 alert:
   title: 'Privileged account login from new country: ${user.id}'
-  description: Domain admin ${user.id} authenticated via VPN-GW-01 from RO
-  fields: {}
+  description: Domain admin ${user.id} authenticated via ${vpn.id} from RO (203.0.113.45); account baseline is SG.
+  fields:
+    user: ${user.id}
+    src_ip: 203.0.113.45
+    src_country: RO
+    hosts: ['${vpn.id}', '${jump.id}', '${host.id}']
+    action: success
 evidence:
 - source: auth
   sourcetype: WinEventLog:Security
-  offset_s: -30
-  fields:
-    user: ${user.id}
-    host: ${host.id}
+  offset_s: -89496
+  fields: {result: success, user: '${user.id}', src_ip: 198.51.100.23, src_country: SG, mfa: approved, mfa_method: push}
+- source: auth
+  sourcetype: WinEventLog:Security
+  offset_s: -329
+  fields: {result: failure, user: '${user.id}', src_ip: 203.0.113.45, src_country: RO, reason: bad_password, target: '${vpn.id}'}
+- source: auth
+  sourcetype: WinEventLog:Security
+  offset_s: 0
+  fields: {result: success, user: '${user.id}', src_ip: 203.0.113.45, src_country: RO, mfa: approved, mfa_method: push,
+           first_seen_country: true, target: '${vpn.id}', vpn_ip: 10.20.0.5}
+- source: edr
+  sourcetype: crowdstrike:events:sensor
+  offset_s: 141
+  fields: {host: '${jump.id}', event: logon, logon_type: 10, user: '${user.id}', src_ip: 10.20.0.5}
 - source: proxy
   sourcetype: bluecoat:proxy
-  offset_s: 10
-  fields:
-    src_host: ${host.id}
+  offset_s: 229
+  fields: {client: '${jump.id}', method: GET, url: 'https://dl.example.net/tools/rclone.zip', category: uncategorized,
+           first_seen_domain: true, bytes_in: 18874368}
+- source: edr
+  sourcetype: crowdstrike:events:sensor
+  offset_s: 517
+  fields: {host: '${jump.id}', event: process, image: mstsc.exe, cmdline: 'mstsc.exe /v:${host.id}', parent: explorer.exe}
+- source: edr
+  sourcetype: crowdstrike:events:sensor
+  offset_s: 539
+  fields: {host: '${host.id}', event: logon, logon_type: 10, user: '${user.id}', src_host: '${jump.id}', src_ip: 10.10.5.21}
+- source: proxy
+  sourcetype: bluecoat:proxy
+  offset_s: 990
+  fields: {client: '${host.id}', method: POST, url: 'https://dl.example.net/upload', bytes_out: 48234496}
 demo_slot: 1

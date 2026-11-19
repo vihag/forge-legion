@@ -73,7 +73,7 @@
   },
   {
     "name": "get_alert",
-    "description": "Fetch a Mock Splunk alert by id.",
+    "description": "Fetch a Splunk alert by id.",
     "inputSchema": {
       "properties": {
         "alert_id": {
@@ -151,7 +151,7 @@
   },
   {
     "name": "list_alert_evidence",
-    "description": "List evidence linked to an alert.",
+    "description": "List every Splunk evidence record linked to an alert (no time window).",
     "inputSchema": {
       "properties": {
         "alert_id": {
@@ -350,7 +350,7 @@
   },
   {
     "name": "search_evidence",
-    "description": "Search Mock Splunk evidence in a time window.",
+    "description": "Search Splunk evidence in a time window (start <= timestamp < end, ISO-8601 UTC).\n\nOmit start/end to search the last 72 hours up to now. Use source \"*\" for all\nsources; entity matches a user, IP, country code or host.\n",
     "inputSchema": {
       "properties": {
         "source": {
@@ -358,12 +358,28 @@
           "type": "string"
         },
         "start": {
-          "title": "Start",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start"
         },
         "end": {
-          "title": "End",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
         },
         "entity": {
           "anyOf": [
@@ -379,9 +395,7 @@
         }
       },
       "required": [
-        "source",
-        "start",
-        "end"
+        "source"
       ],
       "title": "search_evidenceArguments",
       "type": "object"

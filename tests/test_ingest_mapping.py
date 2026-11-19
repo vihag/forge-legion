@@ -42,9 +42,10 @@ def test_alert_maps_to_valid_case_create() -> None:
 def test_evidence_maps_ref_to_evidence_id() -> None:
     evidence = next(
         item
-        # Clock at the hero's last record so the reset restamp leaves fixture times as-is.
+        # Clock 1 s after the hero's last record so the reset restamp leaves fixture
+        # times as-is.
         for item in SplunkStore(
-            clock=lambda: datetime(2026, 11, 18, 2, 20, 11, tzinfo=UTC)
+            clock=lambda: datetime(2026, 11, 18, 2, 20, 12, tzinfo=UTC)
         ).loaded_evidence()
         if item.evidence_id == "EV-AUTH-0003"
     )

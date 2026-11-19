@@ -1,6 +1,6 @@
 """Hero alert is re-stamped on reset (C8 steer)."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from httpx import Client
@@ -24,8 +24,9 @@ def test_hero_alert_restamp_on_reset() -> None:
     latest = max([hero_orig.triggered_at, *(row.timestamp for row in hero_rows)])
     # Fixture story has records after the alert; after reset they must not be in the future.
     assert latest > hero_orig.triggered_at
+    # The latest record lands one EVIDENCE_LEAD (1 s) before the alert.
     offsets = {
-        row.evidence_id: (row.timestamp - latest).total_seconds() for row in hero_rows
+        row.evidence_id: (row.timestamp - latest).total_seconds() - 1 for row in hero_rows
     }
     app = create_app(clock=_Clock())
     with Client(transport=InProcessTransport(app), base_url="http://test") as client:
@@ -37,10 +38,10 @@ def test_hero_alert_restamp_on_reset() -> None:
         for row in evidence:
             ts = datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00"))
             assert (ts - triggered).total_seconds() == offsets[row["evidence_id"]]
-            assert ts <= now
+            assert ts < now
         assert max(
             datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00")) for row in evidence
-        ) == now
+        ) == now - timedelta(seconds=1)
 
 
 def test_hero_time_to_triage_small_after_reset(tmp_path) -> None:
@@ -97,7 +98,7 @@ def test_streamed_evidence_never_after_alert(monkeypatch) -> None:
             )
             assert item.alert.triggered_at == now
             stamps = [row.timestamp for row in item.evidence]
-            assert all(ts <= now for ts in stamps), scenario.id
+            assert all(ts < now for ts in stamps), scenario.id
             records = scenario.evidence
             gaps = [b.offset_s - a.offset_s for a, b in zip(records, records[1:], strict=False)]
             got = [(b - a).total_seconds() for a, b in zip(stamps, stamps[1:], strict=False)]
