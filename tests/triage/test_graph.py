@@ -257,6 +257,7 @@ def test_missing_api_key_fails_before_network() -> None:
         "grok_unknown_evidence_ref.json",
         "grok_missing_field.json",
         "grok_missing_response_id.json",
+        "grok_missing_model.json",
     ],
 )
 def test_invalid_output_flags_review(
@@ -277,7 +278,8 @@ def test_invalid_output_flags_review(
     assert case.status.value == "NEEDS_REVIEW"
     assert case.triage_severity is None
     evidence = triage_stack.case_client.list_evidence(case.id)
-    assert any(item.source == "triage_failure" for item in evidence)
+    failure = next(item for item in evidence if item.source == "triage_failure")
+    assert failure.content["reason"] == "invalid_model_output"
 
 
 def test_no_network_in_ci() -> None:

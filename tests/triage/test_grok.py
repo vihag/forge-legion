@@ -139,6 +139,54 @@ def test_retry_not_on_429() -> None:
         client.close()
 
 
+def test_retry_timeout_then_500_makes_exactly_two_calls() -> None:
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.TimeoutException("timed out")
+        return httpx.Response(500, json={"error": "still down"})
+
+    client = HttpGrokClient(
+        api_key="secret",
+        model="grok-3-mini",
+        base_url="https://api.x.ai/v1",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(GrokCallError):
+            client.assess("{}", evidence_ids={"EV-AUTH-0001"})
+        assert calls["n"] == 2
+    finally:
+        client.close()
+
+
+def test_retry_500_then_timeout_makes_exactly_two_calls() -> None:
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(500, json={"error": "down"})
+        raise httpx.ReadTimeout("timed out")
+
+    client = HttpGrokClient(
+        api_key="secret",
+        model="grok-3-mini",
+        base_url="https://api.x.ai/v1",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(GrokCallError) as exc_info:
+            client.assess("{}", evidence_ids={"EV-AUTH-0001"})
+        assert calls["n"] == 2
+        assert not exc_info.value.is_invalid_output
+        assert exc_info.value.detail == "timeout"
+    finally:
+        client.close()
+
+
 def test_retry_once_on_timeout() -> None:
     calls = {"n": 0}
 

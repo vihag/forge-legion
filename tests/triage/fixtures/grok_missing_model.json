@@ -1,0 +1,13 @@
+{
+  "id": "chatcmpl-fixture-missing-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"original_severity\":\"medium\",\"assessed_severity\":\"high\",\"assessment_confidence\":0.5,\"rationale\":\"ignored\",\"evidence_references\":[\"EV-AUTH-0002\"],\"mitre_techniques\":[\"T1078\"],\"recommended_route\":\"review\",\"additional_evidence_needed\":[]}"
+      }
+    }
+  ],
+  "usage": {}
+}

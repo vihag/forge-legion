@@ -80,18 +80,24 @@ class HttpGrokClient:
 
     def _post_with_retry(self, body: dict[str, Any]) -> httpx.Response:
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        try:
-            response = self._client.post("/chat/completions", json=body, headers=headers)
-        except httpx.TimeoutException:
+        response: httpx.Response | None = None
+        for attempt in (1, 2):
             try:
                 response = self._client.post("/chat/completions", json=body, headers=headers)
             except httpx.TimeoutException as exc:
+                if attempt == 1:
+                    continue
                 raise GrokCallError("grok request failed", detail="timeout") from exc
-        if response.status_code >= 500:
-            response = self._client.post("/chat/completions", json=body, headers=headers)
-        if response.status_code >= 400:
-            raise GrokCallError("grok request failed", detail=response.text[:2000])
-        return response
+            if response.status_code >= 500:
+                if attempt == 1:
+                    continue
+                raise GrokCallError("grok request failed", detail=response.text[:2000])
+            if response.status_code >= 400:
+                raise GrokCallError("grok request failed", detail=response.text[:2000])
+            return response
+        if response is None:
+            raise GrokCallError("grok request failed", detail="no response")
+        raise GrokCallError("grok request failed", detail=response.text[:2000])
 
 
 class FixtureGrokClient:
