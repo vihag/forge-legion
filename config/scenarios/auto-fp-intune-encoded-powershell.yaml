@@ -1,0 +1,38 @@
+id: auto-fp-intune-encoded-powershell
+title: "Encoded PowerShell on ${ws.id}"
+splunk_rule_name: "Endpoint - Encoded PowerShell Command Line - Rule"
+splunk_severity: medium
+outcome_class: auto_fp
+weight: 3
+demo_slot: 11
+mitre_techniques: [T1059.001, T1027]
+entities:
+  ws: {pick: {kind: host, where: {pool: routine, role: laptop}}}
+alert:
+  title: "Encoded PowerShell command line on ${ws.id}"
+  description: "powershell.exe started with -EncodedCommand as SYSTEM on ${ws.id}."
+  fields:
+    dest: ${ws.id}
+    user: SYSTEM
+    process: powershell.exe
+    parent_process: AgentExecutor.exe
+    process_cmdline: "powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand RwBlAHQALQBCAGkAdABMAG8AYwBrAGUAcgBWAG8AbAB1AG0AZQAgAC0ATQBvAHUAbgB0AFAAbwBpAG4AdAAgAEMAOgA="
+evidence:
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -1
+    fields: {host: "${ws.id}", event_simpleName: ProcessRollup2, user: SYSTEM, image: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+             parent: "C:\\Program Files (x86)\\Microsoft Intune Management Extension\\AgentExecutor.exe", grandparent: "Microsoft.Management.Services.IntuneWindowsAgent.exe",
+             decoded_command: "Get-BitLockerVolume -MountPoint C:", parent_signature_valid: true}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 2
+    fields: {host: "${ws.id}", event_simpleName: EndOfProcess, image: powershell.exe, exit_code: 0, network_connections: 0}
+  - source: edr
+    sourcetype: "WinEventLog:Microsoft-Windows-PowerShell/Operational"
+    offset_s: 0
+    fields: {Computer: "${ws.id}", EventCode: 4104, ScriptBlockText: "Get-BitLockerVolume -MountPoint C: | Select-Object ProtectionStatus,EncryptionPercentage", Path: "C:\\Program Files (x86)\\Microsoft Intune Management Extension\\Policies\\Scripts\\detect_bitlocker.ps1"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -86400
+    fields: {host: "${ws.id}", event_simpleName: ProcessRollup2, user: SYSTEM, image: powershell.exe, parent: AgentExecutor.exe, decoded_command: "Get-BitLockerVolume -MountPoint C:", note: "same script, previous run"}

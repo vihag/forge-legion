@@ -1,0 +1,39 @@
+id: hitl-downgrade-gpo-change-window-v2
+title: "GPO immediate scheduled task deployed from DC-02"
+splunk_rule_name: "Change - Group Policy Immediate Scheduled Task Deployed - Rule"
+splunk_severity: critical
+outcome_class: hitl_confirm
+assessed_severity: critical
+weight: 0.7
+mitre_techniques: [T1484.001, T1053.005, T1486]
+entities:
+  user: {ref: "user:da-breakglass"}
+  dc: {ref: "host:DC-02"}
+alert:
+  title: "GPO 'Workstation Baseline' gained an immediate scheduled task, edited by ${user.id} on ${dc.id}"
+  description: "${user.id} added an ImmediateTask to 'Workstation Baseline' (OU=Workstations, 312 computers) running C:\\ProgramData\\wu.exe copied from SYSVOL."
+  fields: {user: "${user.id}", dest: "${dc.id}", gpo: "Workstation Baseline {31B2F340-016D-11D2-945F-00C04FB984F9}", affected_computers: 312, signature_id: 5136}
+evidence:
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -900
+    fields: {EventCode: 4624, Computer: "${dc.id}", TargetUserName: "${user.id}", LogonType: 3, IpAddress: 10.40.0.23, AuthenticationPackageName: NTLM}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -25
+    fields: {EventCode: 5136, Computer: "${dc.id}", SubjectUserName: "${user.id}", AttributeLDAPDisplayName: gPCMachineExtensionNames, OperationType: "Value Added"}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -22
+    fields: {EventCode: 5145, Computer: "${dc.id}", SubjectUserName: "${user.id}", ShareName: "\\\\*\\SYSVOL", RelativeTargetName: "corp.kestrelgate.example\\scripts\\wu.exe", AccessMask: "0x2"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 180
+    fields: {host: "WS-FIN-001", event_simpleName: ProcessRollup2, user: SYSTEM, image: "C:\\ProgramData\\wu.exe", parent: svchost.exe, signature_valid: false, hosts_seen: 27}
+  - source: firewall
+    sourcetype: "pan:traffic"
+    offset_s: -905
+    fields: {src_ip: 10.40.0.23, src_zone: dmz, dest_host: "${dc.id}", dest_port: 445, app: ms-ds-smb, rule: "DMZ-TO-DC-LEGACY", action: allow}
+analyst_knowledge:
+  - fact: "The break-glass domain admin is sealed in the CISO's safe. The seal log (BG-LOG-0091) shows no checkout since its last rotation, and no change is open for workstation GPOs."
+    effect_on_decision: "No legitimate use of da-breakglass is possible, so this is an attacker with DA deploying a payload. Confirm at critical, unlink the GPO now and invoke the ransomware playbook."

@@ -1,0 +1,36 @@
+id: hitl-upgrade-inbox-rule-treasury-leave-v2
+title: "Inbox rule hiding payment emails: amy.lau"
+splunk_rule_name: "Cloud - Suspicious Inbox Rule Created (Financial Keywords) - Rule"
+splunk_severity: high
+outcome_class: hitl_downgrade
+assessed_severity: low
+weight: 0.7
+mitre_techniques: [T1564.008]
+entities:
+  user: {ref: "user:amy.lau"}
+  laptop: {ref: "host:LT-FIN-021"}
+alert:
+  title: "Inbox rule moving remittance emails out of Inbox: ${user.id}"
+  description: "New-InboxRule 'AP remits' on ${user.id}: subject contains 'remittance advice' or 'payment advice'; move to AP-Remittances and mark as read."
+  fields: {user: "${user.id}", src_ip: 10.30.3.57, app: "Outlook", rule_name: "AP remits", action: created}
+evidence:
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: 0
+    fields: {Operation: New-InboxRule, UserId: "${user.id}@kestrelgate.example", ClientIP: 10.30.3.57, Name: "AP remits", SubjectContainsWords: "remittance advice;payment advice",
+             MoveToFolder: "AP-Remittances", MarkAsRead: true, ClientInfoString: "Client=MSExchangeRPC; Outlook"}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -5400
+    fields: {eventType: "user.session.start", actor: "${user.id}", outcome: SUCCESS, client_ip: 10.30.3.57, geo_country: SG, device: "${laptop.id}", managed_device: true, authenticator: "Okta Verify number challenge"}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: -86400
+    fields: {Operation: Add-MailboxPermission, ObjectId: "ap-shared@kestrelgate.example", User: "${user.id}@kestrelgate.example", AccessRights: FullAccess, UserId: "exchange-admin"}
+  - source: email
+    sourcetype: "pps_messagelog"
+    offset_s: -1200
+    fields: {recipient: "${user.id}@kestrelgate.example", sender_count: 37, subject_pattern: "Remittance advice*", messages_last_24h: 212, final_action: delivered}
+analyst_knowledge:
+  - fact: "Amy created this rule herself after the AP shared-mailbox migration moved about 200 remittance advices a day into her personal inbox (SD-88301). She confirmed it on a call."
+    effect_on_decision: "Signed in from the office on her managed laptop, with a business folder name: benign. Downgrade and close; suggest moving the rule onto the shared mailbox."

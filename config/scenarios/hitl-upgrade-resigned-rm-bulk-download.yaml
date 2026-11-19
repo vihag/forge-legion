@@ -1,0 +1,48 @@
+id: hitl-upgrade-resigned-rm-bulk-download
+title: "Bulk download from client library: marcus.lim"
+splunk_rule_name: "Insider - Bulk File Download From SharePoint Site - Rule"
+splunk_severity: medium
+outcome_class: hitl_upgrade
+assessed_severity: high
+weight: 0.7
+demo_slot: 8
+mitre_techniques: [T1530, T1074.001, T1052.001]
+entities:
+  user: {ref: "user:marcus.lim"}
+  laptop: {ref: "host:LT-WM-021"}
+alert:
+  title: "Bulk download: ${user.id} pulled 1,846 files from /sites/WM-ClientBook"
+  description: "${user.id} downloaded 1,846 files (2.3 GB) from the WM-ClientBook site in 22 minutes from managed laptop ${laptop.id}, 31x his daily baseline."
+  fields:
+    user: ${user.id}
+    src: ${laptop.id}
+    src_ip: 10.30.6.44
+    dest: files.kestrelgate-share.example
+    file_count: 1846
+    bytes: 2469606400
+    action: downloaded
+evidence:
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: -1320
+    fields: {Operation: FileDownloaded, UserId: "${user.id}@kestrelgate.example", ClientIP: 10.30.6.44, SiteUrl: "/sites/WM-ClientBook", count: 1846, UserAgent: "OneDrive Sync Engine"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 240
+    fields: {host: "${laptop.id}", event_simpleName: ProcessRollup2, user: "${user.id}", image: "C:\\Program Files\\7-Zip\\7z.exe", parent: explorer.exe,
+             cmdline: "7z.exe a ClientBook_handover.zip \"C:\\Users\\marcus.lim\\OneDrive - Kestrelgate\\WM-ClientBook\""}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 410
+    fields: {host: "${laptop.id}", event_simpleName: RemovableMediaVolumeMounted, device: "Generic USB 3.0 Flash Disk (serial 4C530001)", encrypted: false, device_control_policy: "audit-only (WM)"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 455
+    fields: {host: "${laptop.id}", event_simpleName: FileWritten, file_path: "E:\\ClientBook_handover.zip", size_bytes: 2011349504}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: -5400
+    fields: {Operation: FileAccessed, UserId: "${user.id}@kestrelgate.example", SiteUrl: "/sites/WM-ClientBook", count: 38}
+analyst_knowledge:
+  - fact: "Marcus Lim resigned last Friday to join a competing private bank. His garden leave starts Monday (HR EXIT-2291), and 41 of his clients are under a non-solicit clause."
+    effect_on_decision: "A 'handover' archive copied to unencrypted USB before garden leave is data theft risk. Escalate to high, block USB, preserve the drive, notify HR and Legal."

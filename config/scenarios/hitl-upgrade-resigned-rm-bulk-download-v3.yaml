@@ -1,0 +1,35 @@
+id: hitl-upgrade-resigned-rm-bulk-download-v3
+title: "Bulk access to employee-relations files: joyce.tan"
+splunk_rule_name: "Insider - Bulk File Download From SharePoint Site - Rule"
+splunk_severity: medium
+outcome_class: hitl_upgrade
+assessed_severity: high
+weight: 0.7
+mitre_techniques: [T1530, T1005]
+entities:
+  user: {ref: "user:joyce.tan"}
+  laptop: {ref: "host:LT-HR-005"}
+alert:
+  title: "Bulk download: ${user.id} pulled 377 files from /sites/HR-EmployeeRelations"
+  description: "${user.id} downloaded 377 files from HR-EmployeeRelations in 14 minutes and sent 640 pages to the print queue."
+  fields: {user: "${user.id}", src: "${laptop.id}", src_ip: 10.30.8.15, dest: files.kestrelgate-share.example, file_count: 377, action: downloaded}
+evidence:
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: -840
+    fields: {Operation: FileDownloaded, UserId: "${user.id}@kestrelgate.example", ClientIP: 10.30.8.15, SiteUrl: "/sites/HR-EmployeeRelations", count: 377, sample_folder: "Cases/Open"}
+  - source: edr
+    sourcetype: "WinEventLog:Microsoft-Windows-PrintService/Operational"
+    offset_s: 260
+    fields: {Computer: PRN-01, EventCode: 307, user: "${user.id}", client: "${laptop.id}", documents: 41, pages: 640, printer: "HR-L3-Secure"}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: -86400
+    fields: {Operation: FileAccessed, UserId: "${user.id}@kestrelgate.example", SiteUrl: "/sites/HR-EmployeeRelations", count: 12}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -3600
+    fields: {eventType: "user.session.start", actor: "${user.id}", outcome: SUCCESS, client_ip: 10.30.8.15, geo_country: SG, managed_device: true}
+analyst_knowledge:
+  - fact: "Joyce is the subject of an open disciplinary investigation (ER-2207) and has filed a grievance against her manager. HR asked the SOC to escalate any bulk access to employee-relations files."
+    effect_on_decision: "Normal-looking HR work becomes potential evidence tampering or leak. Escalate to high, suspend her access to the ER site, and hand the case to HR and Legal."

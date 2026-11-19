@@ -1,0 +1,40 @@
+id: hitl-confirm-admin-direct-rdp-findb-v2
+title: "Privileged session to SWIFT-GW-01 adds operator group member"
+splunk_rule_name: "Access - Privileged Group Membership Change on Critical Asset - Rule"
+splunk_severity: high
+outcome_class: hitl_confirm
+assessed_severity: high
+weight: 0.7
+mitre_techniques: [T1098, T1021.001]
+entities:
+  user: {ref: "user:adm.slee"}
+  jump: {ref: "host:JMP-01"}
+  swift: {ref: "host:SWIFT-GW-01"}
+alert:
+  title: "${user.id} added herself to local group 'SWIFT Operators' on ${swift.id}"
+  description: "${user.id} RDP'd from ${jump.id} to ${swift.id} and added ${user.id} to 'SWIFT Operators' (4732)."
+  fields: {user: "${user.id}", src: "${jump.id}", dest: "${swift.id}", group: "SWIFT Operators", signature_id: 4732}
+evidence:
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -410
+    fields: {host: "${jump.id}", event: process, image: mstsc.exe, cmdline: "mstsc.exe /v:SWIFT-GW-01", parent: explorer.exe, user: "${user.id}"}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -400
+    fields: {EventCode: 4624, Computer: "${swift.id}", TargetUserName: "${user.id}", LogonType: 10, IpAddress: 10.10.5.21, WorkstationName: "${jump.id}"}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: 0
+    fields: {EventCode: 4732, Computer: "${swift.id}", SubjectUserName: "${user.id}", MemberName: "${user.id}", TargetUserName: "SWIFT Operators"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: 75
+    fields: {host: "${swift.id}", event_simpleName: ProcessRollup2, user: "${user.id}", image: "C:\\Alliance\\Access\\bin\\saa_bootstrap.exe", parent: explorer.exe}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -2400
+    fields: {EventCode: 4624, Computer: FIN-DB-01, TargetUserName: "${user.id}", LogonType: 10, IpAddress: 10.10.5.21, note: "routine DBA session"}
+analyst_knowledge:
+  - fact: "Sarah Lee's SWIFT access was removed in last week's quarterly access review (IAM-REV-118). She is a DBA with no SWIFT operator role, and re-granting needs dual approval from Treasury."
+    effect_on_decision: "A self-grant on the SWIFT gateway is a control bypass whatever the intent. Confirm at high, remove the membership and suspend adm.slee pending interview."

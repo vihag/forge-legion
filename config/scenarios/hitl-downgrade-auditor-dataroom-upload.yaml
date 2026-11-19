@@ -1,0 +1,47 @@
+id: hitl-downgrade-auditor-dataroom-upload
+title: "Large upload to file-sharing site: alvin.teo"
+splunk_rule_name: "Exfiltration - Large Upload to File Sharing Site - Rule"
+splunk_severity: high
+outcome_class: hitl_downgrade
+assessed_severity: low
+weight: 0.7
+mitre_techniques: [T1567.002, T1560.001]
+entities:
+  user: {ref: "user:alvin.teo"}
+  laptop: {ref: "host:LT-FIN-004"}
+alert:
+  title: "${user.id} uploaded 3.4 GB to dataroom.northcliff-audit.example"
+  description: "${user.id} uploaded 3.4 GB in 41 POSTs from ${laptop.id} to a domain first seen 9 days ago (category File Sharing)."
+  fields:
+    user: ${user.id}
+    src: ${laptop.id}
+    dest_host: dataroom.northcliff-audit.example
+    bytes_out: 3650722201
+    http_method: POST
+    action: allowed
+evidence:
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: -2700
+    fields: {Operation: FileDownloaded, UserId: "${user.id}@kestrelgate.example", SiteUrl: "/sites/Finance-Close", count: 2104, ClientIP: 10.30.3.40}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -1500
+    fields: {host: "${laptop.id}", event_simpleName: ProcessRollup2, user: "${user.id}", image: "C:\\Program Files\\7-Zip\\7z.exe",
+             cmdline: "7z.exe a GL_TB_Subledgers_FY.zip \"C:\\Users\\alvin.teo\\Documents\\YE-Close\"", parent: explorer.exe}
+  - source: proxy
+    sourcetype: "zscaler:web"
+    offset_s: -600
+    fields: {client: "${laptop.id}", user: "${user.id}", method: POST, url: "https://dataroom.northcliff-audit.example/api/v2/upload", category: "File Sharing",
+             action: Allowed, requests: 41, bytes_out: 3650722201, first_seen_domain: false, domain_age_days: 9, dlp_engine: "Financial Statements", dlp_action: "Allow (log)"}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -3100
+    fields: {eventType: "user.session.start", actor: "${user.id}", outcome: SUCCESS, client_ip: 10.30.3.40, geo_country: SG, authenticator: "Okta Verify number challenge"}
+  - source: dns
+    sourcetype: "infoblox:dns"
+    offset_s: -605
+    fields: {src_ip: 10.30.3.40, query: dataroom.northcliff-audit.example, query_type: A, answer: 198.51.100.180, reply_code: NOERROR}
+analyst_knowledge:
+  - fact: "This is the year-end statutory audit handover. The engagement letter with Northcliff & Partners (AUD-ENG-17) names Alvin Teo as the uploader and dataroom.northcliff-audit.example as the agreed data room."
+    effect_on_decision: "Downgrade to benign. Close as an authorised transfer referencing AUD-ENG-17, and ask Finance to pre-register the data room so this doesn't page again."

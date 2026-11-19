@@ -1,0 +1,56 @@
+id: hitl-confirm-admin-direct-rdp-findb
+title: "Privileged RDP to FIN-DB-01 and new local admin"
+splunk_rule_name: "Access - Privileged RDP Followed by Local Account Creation - Rule"
+splunk_severity: high
+outcome_class: hitl_confirm
+assessed_severity: high
+weight: 0.7
+mitre_techniques: [T1021.001, T1136.001, T1098]
+entities:
+  user: {ref: "user:adm.rkumar"}
+  ws: {ref: "host:WS-IT-014"}
+  db: {ref: "host:FIN-DB-01"}
+alert:
+  title: "${user.id} RDP to ${db.id}, then local account 'sqlbkp_svc' added to Administrators"
+  description: "${user.id} logged on to ${db.id} over RDP from 10.30.4.114 (${ws.id}) and created local admin 'sqlbkp_svc' 4 minutes later."
+  fields:
+    user: ${user.id}
+    src: ${ws.id}
+    src_ip: 10.30.4.114
+    dest: ${db.id}
+    new_account: sqlbkp_svc
+    signature_id: 4720
+evidence:
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -262
+    fields: {host: "${ws.id}", event: process, image: mstsc.exe, cmdline: "mstsc.exe /v:FIN-DB-01", parent: explorer.exe, user: "${user.id}"}
+  - source: firewall
+    sourcetype: "pan:traffic"
+    offset_s: -261
+    fields: {src_ip: 10.30.4.114, dest_ip: 10.10.6.20, dest_port: 3389, app: ms-rdp, rule: "TEMP-MIGRATION-ALLOW-RDP", action: allow}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -255
+    fields: {EventCode: 4624, Computer: "${db.id}", TargetUserName: "${user.id}", LogonType: 10, IpAddress: 10.30.4.114, WorkstationName: "${ws.id}"}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: 0
+    fields: {EventCode: 4720, Computer: "${db.id}", SubjectUserName: "${user.id}", TargetUserName: sqlbkp_svc}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: 3
+    fields: {EventCode: 4732, Computer: "${db.id}", SubjectUserName: "${user.id}", MemberName: sqlbkp_svc, TargetUserName: Administrators}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -2040
+    fields: {EventCode: 4624, Computer: "${ws.id}", TargetUserName: rajesh.kumar, LogonType: 2, IpAddress: "127.0.0.1"}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -300
+    fields: {EventCode: 4648, Computer: "${ws.id}", SubjectUserName: rajesh.kumar, TargetUserName: "${user.id}", TargetServerName: FIN-DB-01, ProcessName: "C:\\Windows\\System32\\mstsc.exe"}
+analyst_knowledge:
+  - fact: "Admins may reach FIN-DB-01 only through the JMP-01 PAM jump host, which records every session. A direct workstation-to-FIN-DB-01 RDP means the PAM control was bypassed."
+    effect_on_decision: "The firewall rule TEMP-MIGRATION-ALLOW-RDP is a leftover hole. Confirm, remove sqlbkp_svc and close the rule."
+  - fact: "Rajesh Kumar is on annual leave this week (HR LV-3392) and handed his on-call duties to Jason Wong."
+    effect_on_decision: "No legitimate reason for adm.rkumar activity. Treat the account as compromised and add containment of WS-IT-014."

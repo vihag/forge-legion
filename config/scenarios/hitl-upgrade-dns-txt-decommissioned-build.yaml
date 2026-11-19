@@ -1,0 +1,44 @@
+id: hitl-upgrade-dns-txt-decommissioned-build
+title: "Excessive DNS TXT queries from BLD-02"
+splunk_rule_name: "Network - Excessive DNS TXT Queries to Single Domain - Rule"
+splunk_severity: low
+outcome_class: hitl_upgrade
+assessed_severity: high
+weight: 0.7
+mitre_techniques: [T1071.004, T1048.003]
+entities:
+  host: {ref: "host:BLD-02"}
+alert:
+  title: "Excessive DNS TXT queries from ${host.id} to cdn-sync.example.org"
+  description: "${host.id} (10.10.12.32) issued 4,820 TXT queries with 52-character base32 labels under cdn-sync.example.org in 30 minutes."
+  fields:
+    src: ${host.id}
+    src_ip: 10.10.12.32
+    query: "mzxw6ytboi2dgnbvgy3tqojqgezdgnbvgy3tqojqgezdgnbvgy3t.cdn-sync.example.org"
+    query_type: TXT
+    count: 4820
+evidence:
+  - source: dns
+    sourcetype: "infoblox:dns"
+    offset_s: -1800
+    fields: {src_ip: 10.10.12.32, query_suffix: cdn-sync.example.org, query_type: TXT, count: 4820, unique_labels: 4791, avg_label_length: 52, reply_code: NOERROR, avg_answer_bytes: 220}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -1795
+    fields: {host: "${host.id}", event_simpleName: ProcessRollup2, user: buildagent, image: "/opt/buildagent/bin/agent-sync", parent: "/usr/lib/systemd/systemd",
+             cmdline: "/opt/buildagent/bin/agent-sync --cache-warm", sha256: "7a1e9c4b2d8f3a6c0e5b9d2f7a4c1e8b3d6f9a2c5e8b1d4f7a0c3e6b9d2f5a8c", signed: false}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -2600
+    fields: {host: "${host.id}", event_simpleName: SensorHeartbeat, sensor_version: "7.04.17605", os: "Ubuntu 20.04", last_patch_age_days: 64}
+  - source: firewall
+    sourcetype: "pan:traffic"
+    offset_s: -1800
+    fields: {src_ip: 10.10.12.32, dest_ip: 10.10.1.53, dest_port: 53, app: dns, sessions: 4820, action: allow, rule: "SERVERS-TO-RESOLVERS"}
+  - source: dns
+    sourcetype: "infoblox:dns"
+    offset_s: -1900
+    fields: {src_ip: 10.10.12.32, query: "BLD-01.corp.kestrelgate.example", query_type: A, reply_code: NOERROR}
+analyst_knowledge:
+  - fact: "BLD-02 was decommissioned four weeks ago under CHG-30102 and should be powered off. The build agent moved to BLD-01, so nobody owns or patches BLD-02."
+    effect_on_decision: "An ownerless live server tunnelling data over DNS TXT is high, not low. Isolate it, image it and find out who powered it back on."

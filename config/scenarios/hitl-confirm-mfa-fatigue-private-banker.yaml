@@ -1,0 +1,53 @@
+id: hitl-confirm-mfa-fatigue-private-banker
+title: "MFA push flood followed by approval: weiling.chua"
+splunk_rule_name: "Identity - MFA Push Flood Followed by Approval - Rule"
+splunk_severity: high
+outcome_class: hitl_confirm
+assessed_severity: high
+weight: 0.7
+demo_slot: 2
+mitre_techniques: [T1621, T1078.004, T1114.002]
+entities:
+  user: {ref: "user:weiling.chua"}
+  laptop: {ref: "host:LT-WM-003"}
+alert:
+  title: "MFA push flood then approval for ${user.id} from 203.0.113.61 (NL)"
+  description: "19 Okta Verify pushes denied or ignored in 11 minutes, then one approved. Session started from 203.0.113.61 (NL), a hosting ASN."
+  fields:
+    user: ${user.id}
+    src_ip: 203.0.113.61
+    src_country: NL
+    app: "Okta Verify push"
+    denied_count: 19
+    action: success
+evidence:
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -14400
+    fields: {eventType: "user.session.start", actor: "${user.id}", outcome: SUCCESS, client_ip: 10.30.6.21, geo_country: SG, device: "${laptop.id}", authenticator: "Okta Verify number challenge"}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -700
+    fields: {eventType: "user.authentication.auth_via_mfa", actor: "${user.id}", outcome: FAILURE, reason: "USER_REJECTED_OKTA_VERIFY_PUSH", client_ip: 203.0.113.61, geo_country: NL,
+             asn_org: "Example Hosting BV", count: 19, user_agent: "Mozilla/5.0 (X11; Linux x86_64) Firefox/128.0"}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -6
+    fields: {eventType: "user.authentication.auth_via_mfa", actor: "${user.id}", outcome: SUCCESS, client_ip: 203.0.113.61, geo_country: NL, authenticator: "Okta Verify push", first_seen_country: true}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: 140
+    fields: {Operation: MailItemsAccessed, UserId: "${user.id}@kestrelgate.example", ClientIPAddress: 203.0.113.61, ClientInfoString: "Client=OWA", OperationCount: 212}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: 260
+    fields: {Operation: FileDownloaded, UserId: "${user.id}@kestrelgate.example", ClientIP: 203.0.113.61, SourceFileName: "UHNW_Client_Contacts_Q4.xlsx", SiteUrl: "/personal/weiling_chua"}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: 300
+    fields: {eventType: "system.mfa.factor.activate", actor: "${user.id}", outcome: SUCCESS, client_ip: 203.0.113.61, factor: "Okta Verify (new device: Pixel 8)"}
+analyst_knowledge:
+  - fact: "Wei Ling called the service desk 6 minutes before the approval to report a prompt storm (ticket SD-88213). On callback she admitted tapping Approve by accident to make it stop."
+    effect_on_decision: "Removes any doubt that the NL session is hers. Confirm the takeover and contain: revoke sessions, remove the new factor, reset the password."
+  - fact: "Her book includes a politically exposed client. Any exposure of client contact data needs a Compliance client-notification review within 3 business days."
+    effect_on_decision: "Add the Compliance notification task to the SOAR ticket. Severity stays high."

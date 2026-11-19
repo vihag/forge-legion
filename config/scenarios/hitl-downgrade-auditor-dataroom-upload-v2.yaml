@@ -1,0 +1,37 @@
+id: hitl-downgrade-auditor-dataroom-upload-v2
+title: "Large upload to file-sharing site: henry.kwok"
+splunk_rule_name: "Exfiltration - Large Upload to File Sharing Site - Rule"
+splunk_severity: high
+outcome_class: hitl_confirm
+assessed_severity: high
+weight: 0.7
+mitre_techniques: [T1567.002]
+entities:
+  user: {ref: "user:henry.kwok"}
+  laptop: {ref: "host:LT-TRS-009"}
+alert:
+  title: "${user.id} uploaded 2.9 GB to quickfile-transfer.example.net"
+  description: "${user.id} uploaded 2.9 GB in 17 POSTs from ${laptop.id} to a consumer file-transfer site."
+  fields: {user: "${user.id}", src: "${laptop.id}", dest_host: quickfile-transfer.example.net, bytes_out: 3113851289, http_method: POST, action: allowed}
+evidence:
+  - source: proxy
+    sourcetype: "zscaler:web"
+    offset_s: -480
+    fields: {client: "${laptop.id}", user: "${user.id}", method: POST, url: "https://quickfile-transfer.example.net/upload", category: "File Sharing", action: Allowed,
+             requests: 17, bytes_out: 3113851289, dlp_engine: "Trading Records", dlp_action: "Allow (log)"}
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -1300
+    fields: {host: "${laptop.id}", event_simpleName: ProcessRollup2, user: "${user.id}", image: "C:\\Program Files\\7-Zip\\7z.exe",
+             cmdline: "7z.exe a -p FX_blotter_export.7z \"\\\\FS-02\\Treasury\\FX\\Blotter\"", parent: explorer.exe}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: -2000
+    fields: {Operation: SoftDelete, UserId: "${user.id}@kestrelgate.example", FolderPath: "\\Sent Items", count: 64}
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -3600
+    fields: {eventType: "user.session.start", actor: "${user.id}", outcome: SUCCESS, client_ip: 10.30.5.71, geo_country: SG, managed_device: true}
+analyst_knowledge:
+  - fact: "Henry is under an FX limit-breach review (RISK-INV-56) and was told in writing to preserve, not move or delete, his trading records."
+    effect_on_decision: "The upload, the password-protected archive of the blotter and deleted Sent Items look like evidence removal. Confirm at high, block the site, and preserve the mailbox under legal hold."

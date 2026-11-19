@@ -1,0 +1,49 @@
+id: hitl-upgrade-inbox-rule-treasury-leave
+title: "Inbox rule hiding payment emails: priya.nair"
+splunk_rule_name: "Cloud - Suspicious Inbox Rule Created (Financial Keywords) - Rule"
+splunk_severity: medium
+outcome_class: hitl_upgrade
+assessed_severity: high
+weight: 0.7
+mitre_techniques: [T1564.008, T1114.003]
+entities:
+  user: {ref: "user:priya.nair"}
+alert:
+  title: "Inbox rule moving payment emails to RSS Subscriptions: ${user.id}"
+  description: "New-InboxRule '..' on ${user.id}: subject/body contains remittance, wire, SWIFT or payment confirmation; move to RSS Subscriptions and mark as read."
+  fields:
+    user: ${user.id}
+    src_ip: 198.51.100.62
+    src_country: SG
+    app: "Outlook Web App"
+    rule_name: ".."
+    action: created
+evidence:
+  - source: auth
+    sourcetype: "OktaIM2:log"
+    offset_s: -420
+    fields: {eventType: "user.session.start", actor: "${user.id}", outcome: SUCCESS, client_ip: 198.51.100.62, geo_country: SG, asn_org: "Example Broadband SG (residential)",
+             authenticator: "SMS OTP", new_device: true, user_agent: "Mozilla/5.0 (Windows NT 10.0) Chrome/131.0"}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: 0
+    fields: {Operation: New-InboxRule, UserId: "${user.id}@kestrelgate.example", ClientIP: 198.51.100.62, Name: "..",
+             SubjectOrBodyContainsWords: "remittance;wire;SWIFT;payment confirmation;bank details", MoveToFolder: "RSS Subscriptions", MarkAsRead: true, StopProcessingRules: true}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: -200
+    fields: {Operation: MailItemsAccessed, UserId: "${user.id}@kestrelgate.example", ClientIPAddress: 198.51.100.62, ClientInfoString: "Client=OWA", OperationCount: 64,
+             FolderPath: "\\Inbox\\Vendors"}
+  - source: cloud
+    sourcetype: "o365:management:activity"
+    offset_s: -86400
+    fields: {Operation: MailItemsAccessed, UserId: "daniel.wee@kestrelgate.example", MailboxOwnerUPN: "${user.id}@kestrelgate.example", LogonType: Delegate, ClientIPAddress: 10.30.5.19, OperationCount: 11}
+  - source: email
+    sourcetype: "pps_messagelog"
+    offset_s: -3000
+    fields: {sender: "ap-team@payroll.harbourpay.example", recipient: "${user.id}@kestrelgate.example", subject: "RE: Updated remittance details for December cycle", final_action: delivered, phish_score: 4}
+analyst_knowledge:
+  - fact: "Priya Nair has been on maternity leave for three weeks (HR LOA-5108). Her mailbox should be idle, and Daniel Wee covers it as a delegate, never by signing in as her."
+    effect_on_decision: "A fresh sign-in as Priya on a new device with SMS OTP is not her. Escalate to high as a business-email-compromise setup and contain the account."
+  - fact: "Treasury is midway through changing the payroll provider's bank details this week. That is exactly the conversation a BEC actor would hide with this rule."
+    effect_on_decision: "Freeze the pending bank-detail change until it's verified by callback on a known number."

@@ -1,0 +1,44 @@
+id: auto-benign-sccm-remote-control
+title: "Remote access software session on ${target.id}"
+splunk_rule_name: "Endpoint - Remote Access Software Execution - Rule"
+splunk_severity: low
+outcome_class: auto_benign
+weight: 3
+demo_slot: 7
+mitre_techniques: [T1219]
+entities:
+  tech: {pick: {kind: user, where: {pool: routine, dept: it-servicedesk}}}
+  tech_ws: {pick: {kind: host, where: {pool: routine, dept: it-servicedesk}}}
+  owner: {pick: {kind: user, where: {pool: routine, dept: compliance}}}
+  target: {pick: {kind: host, where: {pool: routine, role: workstation}}}
+alert:
+  title: "Remote control session to ${target.id} from ${tech_ws.id}"
+  description: "CmRcService accepted an inbound remote-control session on ${target.id} initiated by ${tech.id}."
+  fields:
+    user: ${tech.id}
+    src: ${tech_ws.id}
+    dest: ${target.id}
+    app: "ConfigMgr Remote Control"
+    process: CmRcService.exe
+evidence:
+  - source: edr
+    sourcetype: "crowdstrike:events:sensor"
+    offset_s: -15
+    fields: {host: "${tech_ws.id}", event_simpleName: ProcessRollup2, user: "${tech.id}", image: "C:\\Program Files (x86)\\Microsoft Endpoint Manager\\AdminConsole\\bin\\i386\\CmRcViewer.exe",
+             cmdline: "CmRcViewer.exe ${target.id}", parent: Microsoft.ConfigurationManagement.exe, signature_valid: true}
+  - source: auth
+    sourcetype: "WinEventLog:Security"
+    offset_s: -12
+    fields: {EventCode: 4624, Computer: "${target.id}", TargetUserName: "${tech.id}", LogonType: 3, AuthenticationPackageName: Kerberos}
+  - source: edr
+    sourcetype: "WinEventLog:Application"
+    offset_s: -3
+    fields: {Computer: "${target.id}", SourceName: "CmRcService", EventCode: 30069, Message: "Remote control session permission granted by logged-on user ${owner.id}"}
+  - source: firewall
+    sourcetype: "pan:traffic"
+    offset_s: -12
+    fields: {src_host: "${tech_ws.id}", dest_host: "${target.id}", dest_port: 2701, app: unknown-tcp, rule: "ITSD-REMOTE-SUPPORT", action: allow}
+  - source: edr
+    sourcetype: "WinEventLog:Application"
+    offset_s: 640
+    fields: {Computer: "${target.id}", SourceName: "CmRcService", EventCode: 30070, Message: "Remote control session ended"}
