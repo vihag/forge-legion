@@ -2,7 +2,7 @@
 
 FORGE × LEGION: agentic SOC triage and investigation on legacy Splunk, powered by Grok Bots, LangGraph and the Grok API.
 
-This repository currently ships the C1 case store and case API (`/v1`). The binding contract is [`contracts/C1-contract.md`](contracts/C1-contract.md).
+This repository ships the C1 case store and case API (`/v1`) and the C2 Mock Splunk service. The binding contracts are [`contracts/C1-contract.md`](contracts/C1-contract.md) and [`contracts/C2-contract.md`](contracts/C2-contract.md).
 
 ## Setup
 
@@ -16,18 +16,32 @@ pip install -e ".[dev]"
 
 ## Run
 
+Case API:
+
 ```bash
 uvicorn services.case_api.app:app --reload
 ```
 
 The database path is `CASE_DB_PATH`, or `./data/cases.db` when that variable is unset. Liveness is `GET /healthz`. Interactive docs are at `/docs`.
 
+Mock Splunk listens on port 8001:
+
+```bash
+uvicorn services.mock_splunk.app:app --port 8001
+```
+
 ## Reset
 
-Drop and recreate the tables:
+Case API, drop and recreate the tables:
 
 ```bash
 python -m services.case_api.reset
+```
+
+Mock Splunk reloads its fixtures and drops replays. State is in memory, so restarting the process does the same thing:
+
+```bash
+curl -X POST http://127.0.0.1:8001/v1/reset -H 'content-type: application/json' -d '{}'
 ```
 
 ## Test
@@ -39,7 +53,7 @@ pytest
 python scripts/export_openapi.py --check
 ```
 
-`scripts/export_openapi.py` rewrites `contracts/openapi.json` from the live app. `--check` exits 1 when the committed file has drifted.
+`scripts/export_openapi.py` rewrites `contracts/openapi.json` and `contracts/mock_splunk.openapi.json` from the live apps. `--check` exits 1 when either committed file has drifted.
 
 ## API
 
@@ -58,6 +72,20 @@ All case routes are under `/v1` and return JSON. Errors use `{error, message, de
 | `GET /v1/events?after_id=` | Cursor-polled audit stream |
 
 State moves only through `services/case_api/service.py`. The allowed moves are the `TRANSITIONS` dict in `services/case_api/state.py`. C1's SOAR client is `FakeSoarClient`, which returns `SOAR-<case_id>-0001`.
+
+## Mock Splunk
+
+Mock Splunk is a read-only fixture source plus `POST /v1/reset` and `POST /v1/replay`. It does not create cases. A new evidence source is one module, one fixture file, and one registry line, described in `contracts/C2-contract.md` §4.
+
+| Method and path | Role |
+|---|---|
+| `GET /v1/alerts` | Alert feed, paged by `after_seq` |
+| `GET /v1/alerts/{alert_id}` | One alert |
+| `GET /v1/alerts/{alert_id}/evidence` | Evidence linked to an alert |
+| `GET /v1/evidence` | Evidence in a time window for one source |
+| `GET /v1/sources` | Registered sources |
+| `POST /v1/reset` | Reload fixtures and drop replays |
+| `POST /v1/replay` | Emit a new alert id for an existing alert |
 
 ## Known limitations
 

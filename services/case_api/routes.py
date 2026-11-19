@@ -134,7 +134,7 @@ def create_case(body: CaseCreate, service: ServiceDep) -> Case:
     "/cases/{case_id}",
     response_model=Case,
     operation_id="get_case",
-    responses=_errors(404),
+    responses=_errors(404, 422),
 )
 def get_case(case_id: int, service: ServiceDep) -> Case:
     return service.get_case(case_id)
@@ -154,7 +154,7 @@ def triage_case(case_id: int, body: TriageCreate, service: ServiceDep) -> Case:
     "/cases/{case_id}/evidence",
     response_model=list[Evidence],
     operation_id="get_evidence",
-    responses=_errors(404),
+    responses=_errors(404, 422),
 )
 def get_evidence(case_id: int, service: ServiceDep) -> list[Evidence]:
     return service.list_evidence(case_id)
@@ -186,7 +186,7 @@ def record_finding(case_id: int, body: FindingCreate, service: ServiceDep) -> Fi
     "/cases/{case_id}/history",
     response_model=list[AuditEvent],
     operation_id="get_case_history",
-    responses=_errors(404),
+    responses=_errors(404, 422),
 )
 def get_case_history(case_id: int, service: ServiceDep) -> list[AuditEvent]:
     return service.list_history(case_id)
@@ -237,7 +237,7 @@ def submit_to_soar(
     "/cases/{case_id}/view",
     response_model=CaseView,
     operation_id="get_case_view",
-    responses=_errors(404),
+    responses=_errors(404, 422),
 )
 def get_case_view(case_id: int, service: ServiceDep) -> CaseView:
     return service.get_view(case_id)

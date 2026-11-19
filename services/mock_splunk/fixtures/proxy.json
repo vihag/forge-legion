@@ -1,0 +1,35 @@
+{
+  "source": "proxy",
+  "records": [
+    {
+      "evidence_id": "EV-PROXY-0001",
+      "timestamp": "2026-11-18T02:07:30Z",
+      "alert_ids": ["SPL-2026-0001"],
+      "entities": {
+        "hosts": ["JMP-01"]
+      },
+      "content": {
+        "client": "JMP-01",
+        "method": "GET",
+        "url": "https://dl.example.net/tools/rclone.zip",
+        "category": "uncategorized",
+        "first_seen_domain": true,
+        "bytes_in": 18874368
+      }
+    },
+    {
+      "evidence_id": "EV-PROXY-0002",
+      "timestamp": "2026-11-18T02:20:11Z",
+      "alert_ids": ["SPL-2026-0001"],
+      "entities": {
+        "hosts": ["FIN-DB-01"]
+      },
+      "content": {
+        "client": "FIN-DB-01",
+        "method": "POST",
+        "url": "https://dl.example.net/upload",
+        "bytes_out": 48234496
+      }
+    }
+  ]
+}

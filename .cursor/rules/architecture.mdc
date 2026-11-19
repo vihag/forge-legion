@@ -1,11 +1,11 @@
 ---
-description: FORGE case API architecture guardrails
+description: FORGE case API and Mock Splunk architecture guardrails
 alwaysApply: true
 ---
 
-# Case API architecture
+# Case API and Mock Splunk architecture
 
-These rules apply to the FORGE case store and `/v1` case API.
+These rules apply to the FORGE case store, the `/v1` case API, and Mock Splunk.
 
 1. Business rules live only in `services/case_api/service.py`. That includes transitions, approval checks, duplicate guards, and audit writes. Bots and UIs never decide state; they only call the API.
 2. The transition table is one pure dict, `TRANSITIONS`, in `services/case_api/state.py`, together with `check_transition()`. `state.py` does no I/O and does not touch SQLite or HTTP.
@@ -14,3 +14,5 @@ These rules apply to the FORGE case store and `/v1` case API.
 5. `CaseService` takes a store and a `SoarClient` by injection. `services/case_api/app.py` is a factory only.
 6. `/v1` is backward compatible: additive changes only. Never remove or rename a field, status, or path. Breaking changes go to `/v2`.
 7. Modules stay independently testable: `state.py` has no I/O, the service runs without HTTP, and routes hold no logic.
+8. Mock Splunk (`services/mock_splunk`) is a read-only data source plus `reset` and `replay`. It holds no case logic and writes nothing to the Case API.
+9. A new Mock Splunk source follows `contracts/C2-contract.md` §4 only: one module, one fixture file, and one registry line. Do not change routes, shared models, the OpenAPI spec, or tests to add a source.

@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from .support import (
+    ANALYST,
     add_evidence,
     add_finding,
     all_events,
@@ -15,6 +16,7 @@ from .support import (
     propose,
     submit,
     triage,
+    walk_to_proposed,
     walk_to_submitted,
 )
 
@@ -235,3 +237,79 @@ def test_events_stream_paginates_with_after_id(client: TestClient) -> None:
     other = client.get("/v1/events", params={"after_id": 0, "case_id": extra["id"]})
     assert [item["type"] for item in other.json()["items"]] == ["case.ingested"]
     assert client.get("/v1/events", params={"after_id": -1}).status_code == 422
+
+
+def test_reject_writes_exactly_one_disposition_rejected_event(client: TestClient) -> None:
+    proposed = walk_to_proposed(client, "ALT-REJECT-AUDIT")
+    case_id = proposed["case_id"]
+    before = all_events(client)
+    decision = decide(client, case_id, decision="reject", rationale="need more evidence")
+    events = all_events(client)
+    assert len(events) == len(before) + 1
+    event = events[-1]
+    assert event["type"] == "disposition.rejected"
+    assert event["from_status"] == "DISPOSITION_PROPOSED"
+    assert event["to_status"] == "REJECTED"
+    assert event["actor"] == ANALYST
+    assert event["case_id"] == case_id
+    assert event["payload"]["decision_id"] == decision["id"]
+    assert event["payload"]["disposition_id"] == proposed["disposition"]["id"]
+    assert [item["type"] for item in events].count("disposition.rejected") == 1
+
+
+def test_decision_missing_rationale_422_writes_no_event(client: TestClient) -> None:
+    proposed = walk_to_proposed(client, "ALT-NO-RATIONALE")
+    case_id = proposed["case_id"]
+    before = all_events(client)
+    missing = client.post(
+        f"/v1/cases/{case_id}/decision",
+        json={"decision": "approve", "actor": ANALYST},
+    )
+    empty = client.post(
+        f"/v1/cases/{case_id}/decision",
+        json={"decision": "reject", "rationale": "", "actor": ANALYST},
+    )
+    assert missing.status_code == 422
+    assert empty.status_code == 422
+    assert missing.json()["error"] == "validation_error"
+    assert empty.json()["error"] == "validation_error"
+    assert all_events(client) == before
+    assert client.get(f"/v1/cases/{case_id}").json()["status"] == "DISPOSITION_PROPOSED"
+
+
+@pytest.mark.parametrize(
+    ("suffix", "payload"),
+    [
+        (
+            None,
+            {"alert_id": "ALT-NO-ACTOR", "title": "Missing actor", "splunk_severity": "low"},
+        ),
+        ("/triage", {"severity": "low", "rationale": "because", "model": "grok-3"}),
+        ("/evidence", {"source": "mock_splunk", "ref": "EV-AUTH-0001", "content": {}}),
+        (
+            "/findings",
+            {"kind": "hypothesis", "statement": "maybe", "evidence_ids": []},
+        ),
+        (
+            "/disposition",
+            {"action": "benign", "rationale": "noise", "finding_ids": [1]},
+        ),
+        ("/decision", {"decision": "approve", "rationale": "agree"}),
+        ("/soar-submission", {}),
+    ],
+)
+def test_mutating_call_missing_actor_422_writes_no_event(
+    client: TestClient,
+    suffix: str | None,
+    payload: dict[str, Any],
+) -> None:
+    if suffix is None:
+        before = all_events(client)
+        response = client.post("/v1/cases", json=payload)
+    else:
+        case = ingest(client, "ALT-NO-ACTOR")
+        before = all_events(client)
+        response = client.post(f"/v1/cases/{case['id']}{suffix}", json=payload)
+    assert response.status_code == 422
+    assert response.json()["error"] == "validation_error"
+    assert all_events(client) == before

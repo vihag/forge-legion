@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from services.case_api.app import create_app
@@ -436,3 +437,20 @@ def test_soar_failure_returns_502_and_leaves_state_unchanged(tmp_path: Path) -> 
         submission = submit(client, case_id)
         assert submission["soar_case_id"] == f"SOAR-{case_id}-0001"
         assert client.get(f"/v1/cases/{case_id}").json()["status"] == "SUBMITTED"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/v1/cases/{case_id}",
+        "/v1/cases/{case_id}/evidence",
+        "/v1/cases/{case_id}/history",
+        "/v1/cases/{case_id}/view",
+    ],
+)
+def test_get_routes_non_int_id_returns_422(client: TestClient, path: str) -> None:
+    response = client.get(path.format(case_id="abc"))
+    assert response.status_code == 422
+    body = response.json()
+    assert body["error"] == "validation_error"
+    assert set(body) == {"error", "message", "details"}

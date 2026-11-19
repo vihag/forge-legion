@@ -1,14 +1,14 @@
-"""The committed OpenAPI document matches the live app and lists every §1 path."""
+"""Committed OpenAPI documents match the live apps and list every contracted path."""
 
 import json
 from pathlib import Path
 
-from services.case_api.app import create_app
+import pytest
+from scripts.export_openapi import SPECS, canonical_openapi
 
 ROOT = Path(__file__).resolve().parents[1]
-SPEC_PATH = ROOT / "contracts" / "openapi.json"
 
-REQUIRED_METHODS = {
+CASE_METHODS = {
     "/healthz": {"get"},
     "/v1/cases": {"get", "post"},
     "/v1/cases/{case_id}": {"get"},
@@ -23,14 +23,36 @@ REQUIRED_METHODS = {
     "/v1/events": {"get"},
 }
 
+MOCK_METHODS = {
+    "/healthz": {"get"},
+    "/v1/alerts": {"get"},
+    "/v1/alerts/{alert_id}": {"get"},
+    "/v1/alerts/{alert_id}/evidence": {"get"},
+    "/v1/evidence": {"get"},
+    "/v1/sources": {"get"},
+    "/v1/reset": {"post"},
+    "/v1/replay": {"post"},
+}
 
-def test_committed_openapi_matches_app(tmp_path: Path) -> None:
-    app = create_app(db_path=str(tmp_path / "cases.db"))
-    live = json.dumps(app.openapi(), indent=2) + "\n"
-    committed = SPEC_PATH.read_text(encoding="utf-8")
-    assert live == committed
+CASE_GETS_WITH_422 = (
+    "/v1/cases/{case_id}",
+    "/v1/cases/{case_id}/evidence",
+    "/v1/cases/{case_id}/history",
+    "/v1/cases/{case_id}/view",
+)
+
+
+@pytest.mark.parametrize("spec_name", ["case_api", "mock_splunk"])
+def test_committed_openapi_matches_app(spec_name: str) -> None:
+    relative = SPECS[spec_name]
+    committed = (ROOT / relative).read_text(encoding="utf-8")
+    assert canonical_openapi(spec_name) == committed
     spec = json.loads(committed)
     paths = spec["paths"]
-    for path, methods in REQUIRED_METHODS.items():
+    required = CASE_METHODS if spec_name == "case_api" else MOCK_METHODS
+    for path, methods in required.items():
         assert path in paths
         assert methods <= set(paths[path])
+    if spec_name == "case_api":
+        for path in CASE_GETS_WITH_422:
+            assert "422" in paths[path]["get"]["responses"]

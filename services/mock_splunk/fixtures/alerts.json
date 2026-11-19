@@ -1,0 +1,20 @@
+{
+  "seed_version": "c2-seed-1",
+  "alerts": [
+    {
+      "alert_id": "SPL-2026-0001",
+      "title": "Privileged account login from new country: adm.mtan",
+      "splunk_severity": "medium",
+      "summary": "Domain admin adm.mtan authenticated via VPN-GW-01 from RO (203.0.113.45); account baseline is SG.",
+      "rule_name": "Privileged Login From New Country",
+      "mitre_techniques": ["T1078", "T1021"],
+      "triggered_at": "2026-11-18T02:04:00Z",
+      "entities": {
+        "user": "adm.mtan",
+        "src_ip": "203.0.113.45",
+        "src_country": "RO",
+        "hosts": ["VPN-GW-01", "JMP-01", "FIN-DB-01"]
+      }
+    }
+  ]
+}
