@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -131,3 +132,43 @@ def test_ngrok_service_only_in_ngrok_profile_and_uses_env_domain() -> None:
     assert "ngrok" in ngrok_block
     assert "--url=${NGROK_DOMAIN}" in ngrok_block
     assert "ngrok-free.dev" not in text
+
+def _up_public_recipe() -> str:
+    text = MAKEFILE.read_text()
+    match = re.search(r"^up-public:.*?\n((?:\t.*\n)+)", text, re.MULTILINE)
+    assert match, "up-public target not found"
+    return match.group(1)
+
+
+def test_up_public_guard_and_compose_share_one_shell() -> None:
+    """The token guard and compose up must be one recipe line (one shell)."""
+    recipe = _up_public_recipe()
+    lines = recipe.rstrip("\n").split("\n")
+    for line in lines[:-1]:
+        assert line.rstrip().endswith("\\"), f"recipe line not chained: {line!r}"
+    assert "--profile ngrok up" in lines[-1]
+
+
+@pytest.mark.skipif(shutil.which("make") is None, reason="make not installed")
+def test_up_public_uses_env_local_token_over_empty_shell_value(tmp_path: Path) -> None:
+    """`MCP_ADAPTER_TOKEN= make up-public` must hand compose the .env.local token."""
+    (tmp_path / "Makefile").write_text(MAKEFILE.read_text())
+    (tmp_path / ".env.local").write_text(
+        "MCP_ADAPTER_TOKEN=from-env-local\nNGROK_AUTHTOKEN=ngrok-from-env-local\n"
+    )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    seen = tmp_path / "seen.txt"
+    fake = bin_dir / "docker"
+    fake.write_text(f'#!/bin/sh\nprintf "%s" "$MCP_ADAPTER_TOKEN" > "{seen}"\n')
+    fake.chmod(0o755)
+    env = {
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "MCP_ADAPTER_TOKEN": "",
+        "NGROK_AUTHTOKEN": "",
+    }
+    result = subprocess.run(
+        ["make", "-s", "up-public"], cwd=tmp_path, env=env, capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert seen.read_text() == "from-env-local"

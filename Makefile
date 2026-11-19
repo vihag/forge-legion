@@ -41,7 +41,7 @@ up: _check_env
 up-public: _check_env
 	@set -a && . ./.env.local && set +a && \
 	if [ -z "$$MCP_ADAPTER_TOKEN" ]; then echo 'MCP_ADAPTER_TOKEN is required for up-public' >&2; exit 1; fi && \
-	if [ -z "$$NGROK_AUTHTOKEN" ]; then echo 'NGROK_AUTHTOKEN is required for up-public' >&2; exit 1; fi
+	if [ -z "$$NGROK_AUTHTOKEN" ]; then echo 'NGROK_AUTHTOKEN is required for up-public' >&2; exit 1; fi && \
 	$(COMPOSE) --profile ngrok up -d --build --wait
 
 down: _check_env
