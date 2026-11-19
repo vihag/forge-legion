@@ -23,19 +23,19 @@ def _use_fixture_scenarios(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_s1_generate_deterministic() -> None:
-    first = generate(42, 100)
-    second = generate(42, 100)
+    first, _ = generate(42, 100)
+    second, _ = generate(42, 100)
     assert [item.alert.model_dump(mode="json") for item in first] == [
         item.alert.model_dump(mode="json") for item in second
     ]
-    assert generate(7, 100)[0].alert.model_dump(mode="json") != first[0].alert.model_dump(
+    assert generate(7, 100)[0][0].alert.model_dump(mode="json") != first[0].alert.model_dump(
         mode="json"
     )
 
 
 @pytest.mark.parametrize("count", [100, 200, 500])
 def test_s2_pool_mix_bands(count: int) -> None:
-    items = generate(42, count)
+    items, _ = generate(42, count)
     routine = sum(1 for item in items if item.pool == "routine")
     hitl = sum(1 for item in items if item.pool == "hitl")
     assert 0.75 <= routine / count <= 0.85

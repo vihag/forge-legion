@@ -1,9 +1,16 @@
 """Mock SOAR business rules: approval re-check and idempotency."""
 
-from contracts.mock_soar import SoarReceipt, SoarRecord, SoarSubmissionRequest
+from contracts.mock_soar import (
+    SoarReceipt,
+    SoarRecord,
+    SoarSubmissionRequest,
+    SoarTicketReceipt,
+    SoarTicketRecord,
+    SoarTicketRequest,
+)
 from contracts.models import Actor
 from services.mock_soar.errors import ApprovalRequired, ConflictingResubmission, SubmissionNotFound
-from services.mock_soar.store import SoarStore, insert_submission
+from services.mock_soar.store import SoarStore, insert_submission, insert_ticket
 
 
 def utc_now() -> str:
@@ -63,19 +70,58 @@ class MockSoarService:
         with self._store.transaction() as conn:
             return self._store.list_by_case_id(conn, case_id)
 
-    def reset(self) -> int:
+    def create_ticket(self, body: SoarTicketRequest) -> tuple[SoarTicketReceipt, int]:
+        self._validate_ticket_approval(body)
+        now = utc_now()
+        with self._store.transaction() as conn:
+            existing = self._store.get_ticket_by_case_id(conn, body.case_id)
+            if existing is None:
+                record = insert_ticket(conn, body, recorded_at=now)
+                receipt = SoarTicketReceipt(
+                    ticket_id=record.ticket_id,
+                    case_id=record.case_id,
+                    created=True,
+                    recorded_at=record.recorded_at,
+                )
+                return receipt, 201
+            receipt = SoarTicketReceipt(
+                ticket_id=existing.ticket_id,
+                case_id=existing.case_id,
+                created=False,
+                recorded_at=existing.recorded_at,
+            )
+            return receipt, 200
+
+    def list_tickets(self, case_id: int) -> list[SoarTicketRecord]:
+        with self._store.transaction() as conn:
+            return self._store.list_tickets_by_case_id(conn, case_id)
+
+    def reset(self) -> tuple[int, int]:
         return self._store.reset()
 
     @staticmethod
     def _validate_approval(body: SoarSubmissionRequest) -> None:
-        if body.approval.decision != "approve":
+        MockSoarService._validate_ticket_approval_fields(body.approval)
+        _ = Actor.model_validate(body.submitted_by.model_dump())
+
+    @staticmethod
+    def _validate_ticket_approval(body: SoarTicketRequest) -> None:
+        MockSoarService._validate_ticket_approval_fields(body.approval)
+        _ = Actor.model_validate(body.requested_by.model_dump())
+
+    @staticmethod
+    def _validate_ticket_approval_fields(approval: object) -> None:
+        from contracts.mock_soar import SoarApproval
+
+        if not isinstance(approval, SoarApproval):
+            approval = SoarApproval.model_validate(approval)
+        if approval.decision != "approve":
             raise ApprovalRequired(
-                "submission requires an approved disposition",
-                details={"decision": body.approval.decision},
+                "ticket requires an approved disposition",
+                details={"decision": approval.decision},
             )
-        if body.approval.approver.type != "analyst":
+        if approval.approver.type != "analyst":
             raise ApprovalRequired(
                 "approval must come from an analyst",
-                details={"approver_type": body.approval.approver.type},
+                details={"approver_type": approval.approver.type},
             )
-        _ = Actor.model_validate(body.submitted_by.model_dump())

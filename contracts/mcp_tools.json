@@ -38,6 +38,40 @@
     }
   },
   {
+    "name": "create_incident_ticket",
+    "description": "Create an incident ticket for an approved case.",
+    "inputSchema": {
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "integer"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        }
+      },
+      "required": [
+        "case_id",
+        "actor_id"
+      ],
+      "title": "create_incident_ticketArguments",
+      "type": "object"
+    }
+  },
+  {
     "name": "get_alert",
     "description": "Fetch a Mock Splunk alert by id.",
     "inputSchema": {
@@ -56,12 +90,39 @@
   },
   {
     "name": "get_case",
-    "description": "Fetch the full case view.",
+    "description": "Fetch a case, optionally with evidence, findings, or audit.",
     "inputSchema": {
       "properties": {
         "case_id": {
           "title": "Case Id",
           "type": "integer"
+        },
+        "include": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Include"
+        },
+        "audit_limit": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audit Limit"
         }
       },
       "required": [

@@ -2,7 +2,7 @@
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, FastAPI, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -25,6 +25,8 @@ from contracts.models import (
     Finding,
     FindingCreate,
     HealthResponse,
+    IncidentTicketCreate,
+    IncidentTicketResponse,
     Metrics,
     ReviewFlagCreate,
     Severity,
@@ -142,12 +144,38 @@ def create_case(body: CaseCreate, service: ServiceDep) -> Case:
 
 @router.get(
     "/cases/{case_id}",
-    response_model=Case,
     operation_id="get_case",
     responses=_errors(404, 422),
 )
-def get_case(case_id: int, service: ServiceDep) -> Case:
-    return service.get_case(case_id)
+def get_case(
+    case_id: int,
+    service: ServiceDep,
+    include: Annotated[str | None, Query()] = None,
+    audit_limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+) -> Case | dict[str, Any]:
+    if include is None or include.strip() == "":
+        if audit_limit is not None:
+            raise HTTPException(status_code=422, detail="audit_limit requires include")
+        return service.get_case(case_id)
+    parts = frozenset(part.strip() for part in include.split(",") if part.strip())
+    limit = 50 if audit_limit is None else audit_limit
+    return service.get_case_with_includes(case_id, include=parts, audit_limit=limit)
+
+
+@router.post(
+    "/cases/{case_id}/incident-ticket",
+    response_model=IncidentTicketResponse,
+    operation_id="create_incident_ticket",
+    responses=_errors(403, 404, 409, 422, 502),
+)
+def create_incident_ticket(
+    case_id: int,
+    body: IncidentTicketCreate,
+    service: ServiceDep,
+) -> JSONResponse:
+    result = service.create_incident_ticket(case_id, body)
+    status = 201 if result.created else 200
+    return JSONResponse(status_code=status, content=result.model_dump(mode="json"))
 
 
 @router.post(

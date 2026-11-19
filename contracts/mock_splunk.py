@@ -101,6 +101,8 @@ class StreamStatus(APIModel):
     seed: int
     emitted: int = Field(ge=0)
     next_index: int = Field(ge=0)
+    hitl_used: int = Field(ge=0)
+    hitl_total: int = Field(ge=0)
 
 
 class StreamStopRequest(APIModel):

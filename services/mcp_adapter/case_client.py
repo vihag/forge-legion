@@ -119,8 +119,33 @@ class CaseApiClient:
             params["alert_id"] = alert_id
         return self._request_dict("GET", "/v1/cases", params=params)
 
-    def get_case(self, case_id: int) -> dict[str, Any]:
+    def get_case(
+        self,
+        case_id: int,
+        *,
+        include: list[str] | None = None,
+        audit_limit: int | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if include:
+            params["include"] = ",".join(include)
+        if audit_limit is not None:
+            params["audit_limit"] = audit_limit
+        if params:
+            return self._request_dict("GET", f"/v1/cases/{case_id}", params=params)
         return self._request_dict("GET", f"/v1/cases/{case_id}/view")
+
+    def create_incident_ticket(
+        self,
+        case_id: int,
+        *,
+        actor: Actor,
+        summary: str | None = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {"actor": actor.model_dump(mode="json")}
+        if summary is not None:
+            body["summary"] = summary
+        return self._request_dict("POST", f"/v1/cases/{case_id}/incident-ticket", json=body)
 
     def get_case_history(self, case_id: int) -> list[Any]:
         result = self._request("GET", f"/v1/cases/{case_id}/history")

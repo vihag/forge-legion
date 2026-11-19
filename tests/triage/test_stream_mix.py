@@ -52,7 +52,7 @@ def _ingest_stream(splunk_app, seed: int, count: int) -> list[object]:
     store = splunk_app.state.store
     store.reset()
     reset_registry()
-    items = generate(seed, count)
+    items, _ = generate(seed, count)
     for item in items:
         store._ingest_stream_item(item)
     return items

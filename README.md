@@ -12,6 +12,10 @@ Simulated alert traffic: `make stream-start` runs the Mock Splunk stream at `STR
 
 Verify metrics against case views: `python scripts/metrics_check.py --base http://localhost:8080`.
 
+## Routine webhook (C8)
+
+When `ROUTINE_WEBHOOK_ENABLED=1` and both `ROUTINE_WEBHOOK_URL` and `ROUTINE_WEBHOOK_KEY` are set in `.env.local`, the triage worker POSTs TRIAGED collaborative cases to your endpoint. The env value for `ROUTINE_WEBHOOK_KEY` is the bare secret; the worker sends `Authorization: Bearer <key>`. Set URL and key by hand in `.env.local` (`make env-merge` only adds missing keys). Use `make webhook-check` to see `set` or `empty` without printing values.
+
 ## Compose deployment (C5)
 
 Create or refresh local env keys (never commit `.env.local`), then start the stack:

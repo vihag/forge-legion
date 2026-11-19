@@ -52,6 +52,21 @@ def load_scenario_file(path: Path) -> ScenarioFile:
     return document
 
 
+def _script_offsets(document: ScenarioFile) -> tuple[int, ...] | None:
+    if document.demo_offset_s is not None:
+        if isinstance(document.demo_offset_s, int):
+            if document.demo_offset_s < 0:
+                raise ValueError("demo_offset_s must be >= 0")
+            return (document.demo_offset_s,)
+        offsets = tuple(int(value) for value in document.demo_offset_s)
+        if any(value < 0 for value in offsets):
+            raise ValueError("demo_offset_s entries must be >= 0")
+        return offsets
+    if document.demo_slot is not None:
+        return (document.demo_slot * 60,)
+    return None
+
+
 def scenario_from_file(document: ScenarioFile) -> Scenario:
     return Scenario(
         id=document.id,
@@ -61,6 +76,7 @@ def scenario_from_file(document: ScenarioFile) -> Scenario:
         outcome_class=document.outcome_class,
         weight=document.weight,
         demo_slot=document.demo_slot,
+        script_offsets=_script_offsets(document),
         assessed_severity=document.assessed_severity,
         mitre_techniques=list(document.mitre_techniques),
         entities=document.entities,
@@ -126,6 +142,8 @@ def _check_file(world: WorldFile, path: Path) -> list[str]:
         _validate_outcome_severity(document)
     except ValueError as exc:
         errors.append(f"{prefix}: V7 {exc}")
+    if document.demo_slot is not None and document.demo_offset_s is not None:
+        errors.append(f"{prefix}: V8 demo_slot and demo_offset_s are mutually exclusive")
     return errors
 
 
@@ -329,6 +347,15 @@ def main(argv: list[str] | None = None) -> int:
             for line in errors:
                 print(line, file=sys.stderr)
             return 1
+        loaded = load_scenarios(world_path=args.world, scenario_dir=args.dir)
+        from services.mock_splunk.stream import plan_script
+
+        plan = plan_script(
+            loaded.scenarios,
+            seed=0,
+            script_path=args.dir.parent / "demo_script.yaml",
+        )
+        print(f"script plan: {len(plan)} events")
         return 0
     return 2
 

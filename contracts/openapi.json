@@ -182,6 +182,40 @@
               "type": "integer",
               "title": "Case Id"
             }
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include"
+            }
+          },
+          {
+            "name": "audit_limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 200,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Audit Limit"
+            }
           }
         ],
         "responses": {
@@ -190,7 +224,16 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Case"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Case"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  ],
+                  "title": "Response Get Case"
                 }
               }
             }
@@ -207,6 +250,98 @@
           },
           "422": {
             "description": "Validation error or instruction mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/cases/{case_id}/incident-ticket": {
+      "post": {
+        "tags": [
+          "cases"
+        ],
+        "summary": "Create Incident Ticket",
+        "operationId": "create_incident_ticket",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncidentTicketCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentTicketResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Actor is not an analyst",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Case not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error or instruction mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "SOAR submission failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -2467,6 +2602,59 @@
         ],
         "title": "HealthResponse"
       },
+      "IncidentTicketCreate": {
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "actor"
+        ],
+        "title": "IncidentTicketCreate"
+      },
+      "IncidentTicketResponse": {
+        "properties": {
+          "ticket_id": {
+            "type": "string",
+            "title": "Ticket Id"
+          },
+          "case_id": {
+            "type": "integer",
+            "title": "Case Id"
+          },
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          },
+          "recorded_at": {
+            "type": "string",
+            "title": "Recorded At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ticket_id",
+          "case_id",
+          "created",
+          "recorded_at"
+        ],
+        "title": "IncidentTicketResponse"
+      },
       "Metrics": {
         "properties": {
           "counts": {
@@ -2629,6 +2817,11 @@
             "minimum": 0.0,
             "title": "Collaborative Open"
           },
+          "with_legion_open": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "With Legion Open"
+          },
           "needs_review": {
             "type": "integer",
             "minimum": 0.0,
@@ -2643,6 +2836,7 @@
           "by_route",
           "auto_resolved",
           "collaborative_open",
+          "with_legion_open",
           "needs_review"
         ],
         "title": "MetricsCounts"

@@ -125,6 +125,18 @@ class SoarSubmitRequest(APIModel):
     actor: Actor
 
 
+class IncidentTicketCreate(APIModel):
+    actor: Actor
+    summary: str | None = None
+
+
+class IncidentTicketResponse(APIModel):
+    ticket_id: str
+    case_id: int
+    created: bool
+    recorded_at: str
+
+
 class Case(APIModel):
     id: int
     alert_id: str
@@ -289,6 +301,7 @@ class MetricsCounts(APIModel):
     by_route: dict[str, int]
     auto_resolved: int = Field(ge=0)
     collaborative_open: int = Field(ge=0)
+    with_legion_open: int = Field(ge=0)
     needs_review: int = Field(ge=0)
 
 

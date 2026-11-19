@@ -38,7 +38,7 @@ def test_w1_duplicate_alert_triaged_once(
     splunk_client = SplunkClient("http://splunk.test", transport=transport)
     splunk_client.reset()
     reset_registry()
-    item = generate(7, 1)[0]
+    item = generate(7, 1)[0][0]
     splunk_app.state.store._ingest_stream_item(item)
     counting = CountingStreamGrok()
     deps = TriageDeps(
@@ -88,7 +88,7 @@ def test_w3_usage_and_model_requested_visible_in_view(triage_stack: TriageDeps) 
     splunk_client = SplunkClient("http://splunk.test", transport=InProcessTransport(splunk_app))
     splunk_client.reset()
     reset_registry()
-    item = generate(11, 1)[0]
+    item = generate(11, 1)[0][0]
     splunk_app.state.store._ingest_stream_item(item)
     deps = TriageDeps(
         case_client=triage_stack.case_client,

@@ -31,10 +31,9 @@ def test_script_schedule_follows_demo_script(config_scenarios: None) -> None:
 
 
 def test_script_has_gate_refused_medium_case_near_three_minutes(config_scenarios: None) -> None:
-    schedule = stream.script_schedule(stream.list_scenarios())
-    # One event per 20 s tick at 3/min: index k fires at about 20 * (k + 1) s.
-    window = [s for k, s in enumerate(schedule) if 150 <= 20 * (k + 1) <= 180]
-    assert any(s.id == "hitl-confirm-findb-index-maintenance" for s in window)
+    plan = stream.plan_script(stream.list_scenarios(), seed=0)
+    window = [sid for offset, sid, _occ in plan if 150 <= offset <= 180]
+    assert "hitl-confirm-findb-index-maintenance" in window
 
 
 def test_script_schedule_falls_back_to_demo_slot(monkeypatch: pytest.MonkeyPatch) -> None:

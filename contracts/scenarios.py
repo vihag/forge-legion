@@ -122,6 +122,7 @@ class ScenarioFile(BaseModel):
     outcome_class: OutcomeClass
     weight: float = Field(ge=0)
     demo_slot: int | None = Field(default=None, ge=0)
+    demo_offset_s: int | list[int] | None = None
     assessed_severity: Severity | None = None
     mitre_techniques: list[str] = Field(default_factory=list)
     entities: dict[str, EntityBinding] = Field(default_factory=dict)
@@ -142,6 +143,7 @@ class Scenario(BaseModel):
     outcome_class: OutcomeClass
     weight: float
     demo_slot: int | None
+    script_offsets: tuple[int, ...] | None
     assessed_severity: Severity | None
     mitre_techniques: list[str]
     entities: dict[str, EntityBinding]

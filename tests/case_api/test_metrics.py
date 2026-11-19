@@ -168,6 +168,7 @@ def test_m1_fixture_store_exact_metrics(metrics_client: TestClient) -> None:
             "by_route": {"autonomous": 1, "collaborative": 2, "review": 1},
             "auto_resolved": 1,
             "collaborative_open": 1,
+            "with_legion_open": 1,
             "needs_review": 1,
         },
         "uplifts": {"low->high": 1},

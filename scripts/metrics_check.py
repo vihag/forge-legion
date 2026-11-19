@@ -82,6 +82,7 @@ def _recompute(base: str) -> dict[str, Any]:
     views = [_view(base, int(item["id"])) for item in summaries]
     by_status: dict[str, int] = {}
     auto_resolved = 0
+    with_legion_open = 0
     uplifts: dict[str, int] = {}
     downgrades = 0
     triage_times: list[float] = []
@@ -93,6 +94,9 @@ def _recompute(base: str) -> dict[str, Any]:
         by_status[status] = by_status.get(status, 0) + 1
         if status == "AUTO_RESOLVED":
             auto_resolved += 1
+        route = view.get("route")
+        if status == "TRIAGED" and route in ("collaborative", "autonomous"):
+            with_legion_open += 1
         splunk = view.get("splunk_severity")
         # CaseView exposes the effective severity (triage if set, else Splunk).
         triage = view.get("triage_severity") or view.get("severity")
@@ -125,6 +129,7 @@ def _recompute(base: str) -> dict[str, Any]:
             "total": len(views),
             "by_status": by_status,
             "auto_resolved": auto_resolved,
+            "with_legion_open": with_legion_open,
         },
         "uplifts": uplifts,
         "downgrades": downgrades,
@@ -153,9 +158,9 @@ def _timing_close(left: dict[str, Any], right: dict[str, Any]) -> bool:
 
 def _compare(expected: dict[str, Any], actual: dict[str, Any]) -> list[str]:
     diffs: list[str] = []
-    for key in ("total", "auto_resolved"):
-        if expected["counts"][key] != actual["counts"][key]:
-            diffs.append(f"counts.{key} {actual['counts'][key]} != {expected['counts'][key]}")
+    for key in ("total", "auto_resolved", "with_legion_open"):
+        if expected["counts"][key] != actual["counts"].get(key, 0):
+            diffs.append(f"counts.{key} {actual['counts'].get(key)} != {expected['counts'][key]}")
     for status, count in expected["counts"]["by_status"].items():
         live = actual["counts"]["by_status"].get(status, 0)
         if live != count:

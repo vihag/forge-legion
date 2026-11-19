@@ -204,6 +204,29 @@ def _load_fixtures(fixtures_dir: Path) -> _LoadedSeed:
     return _LoadedSeed(seed_version, alerts, evidence)
 
 
+_SEED_HERO_ALERT_ID = "SPL-2026-0001"
+
+
+def _restamp_seed_hero(loaded: _LoadedSeed, now: datetime) -> _LoadedSeed:
+    hero = next((alert for alert in loaded.alerts if alert.alert_id == _SEED_HERO_ALERT_ID), None)
+    if hero is None:
+        return loaded
+    shift = now - hero.triggered_at
+    alerts = [
+        alert.model_copy(update={"triggered_at": now, "emitted_at": now})
+        if alert.alert_id == _SEED_HERO_ALERT_ID
+        else alert
+        for alert in loaded.alerts
+    ]
+    evidence = [
+        row.model_copy(update={"timestamp": row.timestamp + shift})
+        if _SEED_HERO_ALERT_ID in row.alert_ids
+        else row
+        for row in loaded.evidence
+    ]
+    return _LoadedSeed(loaded.seed_version, alerts, evidence)
+
+
 def _evidence_key(item: SplunkEvidence) -> tuple[datetime, str]:
     return (item.timestamp, item.evidence_id)
 
@@ -274,6 +297,9 @@ class SplunkStore:
         self._stream_rate_per_min: int | None = None
         self._stream_seed: int | None = None
         self._stream_engine: StreamEngine | None = None
+        self._hitl_used: set[str] = set()
+        self._script_plan: list[tuple[int, str, int]] = []
+        self._stream_started_at: datetime | None = None
         self.reset()
 
     @property
@@ -291,6 +317,7 @@ class SplunkStore:
         if self._stream_engine is not None:
             self._stream_engine.stop()
         loaded = _load_fixtures(self._fixtures_dir)
+        loaded = _restamp_seed_hero(loaded, _aware_clock(self._clock()))
         self._seed_version = loaded.seed_version
         self._alerts = {alert.alert_id: alert for alert in loaded.alerts}
         self._order = [alert.alert_id for alert in loaded.alerts]
@@ -302,6 +329,9 @@ class SplunkStore:
         self._stream_mode = None
         self._stream_rate_per_min = None
         self._stream_seed = None
+        self._hitl_used = set()
+        self._script_plan = []
+        self._stream_started_at = None
         from services.mock_splunk.stream import reset_registry
 
         reset_registry()
@@ -332,6 +362,13 @@ class SplunkStore:
         self._stream_seed = (
             request.seed if request.seed is not None else int(os.environ.get("STREAM_SEED", "42"))
         )
+        from services.mock_splunk.stream import list_scenarios, plan_script
+
+        self._stream_started_at = self._clock()
+        if request.mode == "script":
+            self._script_plan = plan_script(list_scenarios(), self._stream_seed or 0)
+        else:
+            self._script_plan = []
         started = self._stream_engine.start()
         return started, self.stream_status()
 
@@ -345,6 +382,9 @@ class SplunkStore:
         rate = self._stream_rate_per_min or int(os.environ.get("STREAM_RATE_PER_MIN", "3"))
         seed = self._stream_seed or int(os.environ.get("STREAM_SEED", "42"))
         running = False if self._stream_engine is None else self._stream_engine.is_running()
+        from services.mock_splunk.stream import hitl_total, list_scenarios
+
+        scenarios = list_scenarios()
         return {
             "running": running,
             "mode": self._stream_mode,
@@ -352,31 +392,48 @@ class SplunkStore:
             "seed": seed,
             "emitted": self._stream_emitted,
             "next_index": self._stream_next_index,
+            "hitl_used": len(self._hitl_used),
+            "hitl_total": hitl_total(scenarios),
         }
 
     def emit_stream_tick(self) -> None:
-        from services.mock_splunk.stream import generate, list_scenarios, script_schedule
+        from services.mock_splunk import stream as stream_mod
+        from services.mock_splunk.stream import generate, plan_script, scenario_by_id
 
         seed = self._stream_seed or int(os.environ.get("STREAM_SEED", "42"))
         if self._stream_mode == "script":
-            schedule = script_schedule(list_scenarios())
-            if self._stream_next_index >= len(schedule):
+            plan = self._script_plan
+            if not plan:
+                plan = plan_script(stream_mod.list_scenarios(), seed)
+            if self._stream_next_index >= len(plan):
                 if self._stream_engine is not None:
                     self._stream_engine.stop()
                 return
-            scenario = schedule[self._stream_next_index]
-            from services.mock_splunk import stream as stream_mod
-
+            offset_s, scenario_id, occurrence = plan[self._stream_next_index]
+            started = self._stream_started_at or self._clock()
+            elapsed = (self._clock() - started).total_seconds()
+            if elapsed < offset_s:
+                return
+            scenario = scenario_by_id(scenario_id)
+            if scenario is None:
+                return
             batch = [
                 stream_mod._emit_one(
                     scenario=scenario,
-                    stream_index=self._stream_next_index,
+                    stream_index=self._stream_emitted,
                     clock=self._clock,
-                    rng=random.Random(f"{seed}:entity:{self._stream_next_index}"),
+                    rng=random.Random(f"{seed}:entity:{scenario_id}:{occurrence}"),
                 )
             ]
         else:
-            batch = generate(seed, 1, start_index=self._stream_next_index, clock=self._clock)
+            batch, used = generate(
+                seed,
+                1,
+                start_index=self._stream_next_index,
+                clock=self._clock,
+                hitl_used=frozenset(self._hitl_used),
+            )
+            self._hitl_used = set(used)
         if not batch:
             return
         item = batch[0]

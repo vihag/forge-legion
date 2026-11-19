@@ -14,12 +14,13 @@ from services.triage.config import load_settings
 from services.triage.graph import TriageDeps
 from services.triage.grok import FixtureGrokClient
 from services.triage.http_transport import InProcessTransport
+from tests.mock_splunk.conftest import fixed_clock
 
 
 @pytest.fixture
 def triage_stack(tmp_path: Path) -> Iterator[TriageDeps]:
     case_app = create_case_app(db_path=str(tmp_path / "cases.db"))
-    splunk_app = create_splunk_app()
+    splunk_app = create_splunk_app(clock=fixed_clock)
     case_transport = InProcessTransport(case_app)
     splunk_transport = InProcessTransport(splunk_app)
     case_client = CaseApiClient("http://case.test", transport=case_transport)

@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from services.mock_splunk.app import create_app
 
-FIXED_CLOCK_TIME = datetime(2026, 11, 18, 3, 0, tzinfo=UTC)
+FIXED_CLOCK_TIME = datetime(2026, 11, 18, 2, 4, tzinfo=UTC)
 
 
 def fixed_clock() -> datetime:

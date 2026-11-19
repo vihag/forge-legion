@@ -150,6 +150,124 @@ def _weighted_pick(rng: random.Random, scenarios: tuple[Scenario, ...]) -> Scena
     return rng.choices(pool, weights=weights, k=1)[0]
 
 
+def _routine_scenarios(scenarios: tuple[Scenario, ...]) -> list[Scenario]:
+    return [
+        scenario
+        for scenario in scenarios
+        if scenario.weight > 0 and scenario.outcome_class.startswith("auto_")
+    ]
+
+
+def _hitl_scenarios(scenarios: tuple[Scenario, ...]) -> list[Scenario]:
+    return [
+        scenario
+        for scenario in scenarios
+        if scenario.weight > 0 and not scenario.outcome_class.startswith("auto_")
+    ]
+
+
+def hitl_total(scenarios: tuple[Scenario, ...]) -> int:
+    return len(_hitl_scenarios(scenarios))
+
+
+def default_script_path(scenario_dir: Path | None = None) -> Path:
+    """``demo_script.yaml`` next to the scenario dir; ``SCENARIO_SCRIPT`` overrides."""
+    override = os.environ.get("SCENARIO_SCRIPT")
+    if override:
+        return Path(override)
+    directory = scenario_dir if scenario_dir is not None else _scenario_paths()[1]
+    return directory.parent / "demo_script.yaml"
+
+
+def _script_file_plan(
+    scenarios: tuple[Scenario, ...],
+    path: Path,
+) -> list[tuple[int, str, int]] | None:
+    if not path.is_file():
+        return None
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    events = raw.get("events") or []
+    known = {scenario.id for scenario in scenarios}
+    missing = sorted({str(event["scenario"]) for event in events} - known)
+    if missing:
+        raise ValueError(f"{path.name}: unknown scenarios {missing}")
+    occurrences: dict[str, int] = {}
+    entries: list[tuple[int, str, int]] = []
+    for event in sorted(events, key=lambda item: int(item["at_s"])):
+        offset_s = int(event["at_s"])
+        if offset_s < 0:
+            raise ValueError(f"{path.name}: at_s must be >= 0")
+        scenario_id = str(event["scenario"])
+        occurrence = occurrences.get(scenario_id, 0)
+        occurrences[scenario_id] = occurrence + 1
+        entries.append((offset_s, scenario_id, occurrence))
+    entries.sort(key=lambda item: (item[0], item[1], item[2]))
+    return entries
+
+
+def plan_script(
+    scenarios: tuple[Scenario, ...],
+    seed: int,
+    *,
+    script_path: Path | None = None,
+) -> list[tuple[int, str, int]]:
+    """Single script planner: ``(offset_s, scenario_id, occurrence)`` sorted by offset.
+
+    ``demo_script.yaml`` (events ``at_s`` + ``scenario``) is the source of truth when present;
+    otherwise per-scenario ``demo_offset_s`` / ``demo_slot`` (slot n -> n*60 s) are used.
+    """
+    del seed
+    scripted = _script_file_plan(scenarios, script_path or default_script_path())
+    if scripted is not None:
+        return scripted
+    entries: list[tuple[int, str, int]] = []
+    for scenario in scenarios:
+        offsets = scenario.script_offsets
+        if not offsets:
+            continue
+        for occurrence, offset_s in enumerate(offsets):
+            entries.append((offset_s, scenario.id, occurrence))
+    entries.sort(key=lambda item: (item[0], item[1], item[2]))
+    return entries
+
+
+def _pick_hitl(
+    rng: random.Random,
+    scenarios: tuple[Scenario, ...],
+    hitl_used: frozenset[str],
+) -> tuple[Scenario, frozenset[str]]:
+    hitl = _hitl_scenarios(scenarios)
+    if not hitl:
+        raise RuntimeError("no hitl scenarios")
+    available = [scenario for scenario in hitl if scenario.id not in hitl_used]
+    next_used = set(hitl_used)
+    if not available:
+        available = hitl
+        next_used = set()
+    chosen = _weighted_pick(rng, tuple(available))
+    next_used.add(chosen.id)
+    if len(next_used) >= len(hitl):
+        next_used = set()
+    return chosen, frozenset(next_used)
+
+
+def _pick_scenario(
+    rng: random.Random,
+    scenarios: tuple[Scenario, ...],
+    hitl_used: frozenset[str],
+) -> tuple[Scenario, frozenset[str]]:
+    routine = _routine_scenarios(scenarios)
+    hitl = _hitl_scenarios(scenarios)
+    routine_weight = sum(scenario.weight for scenario in routine)
+    hitl_weight = sum(scenario.weight for scenario in hitl)
+    total = routine_weight + hitl_weight
+    if total <= 0:
+        raise RuntimeError("no weighted scenarios")
+    if rng.random() * total < routine_weight:
+        return _weighted_pick(rng, tuple(routine)), hitl_used
+    return _pick_hitl(rng, scenarios, hitl_used)
+
+
 def _entities_to_splunk(entities: dict[str, dict[str, Any]]) -> Entities:
     user: str | None = None
     hosts: list[str] = []
@@ -238,42 +356,24 @@ def generate(
     *,
     clock: Clock | None = None,
     scenario_dir: Path | None = None,
-) -> list[GeneratedStreamItem]:
+    hitl_used: frozenset[str] | None = None,
+) -> tuple[list[GeneratedStreamItem], frozenset[str]]:
     del scenario_dir
     scenarios = _loaded().scenarios
+    used = frozenset() if hitl_used is None else hitl_used
     results: list[GeneratedStreamItem] = []
     for offset in range(n):
         stream_index = start_index + offset
         pick_rng = random.Random(f"{seed}:pick:{stream_index}")
         entity_rng = random.Random(f"{seed}:entity:{stream_index}")
-        scenario = _weighted_pick(pick_rng, scenarios)
+        scenario, used = _pick_scenario(pick_rng, scenarios, used)
         results.append(
             _emit_one(scenario=scenario, stream_index=stream_index, clock=clock, rng=entity_rng)
         )
-    return results
-
-
-def _script_events(scenarios: tuple[Scenario, ...]) -> list[Scenario] | None:
-    """Events from ``demo_script.yaml`` next to the scenario dir, in ``at_s`` order."""
-    _, directory = _scenario_paths()
-    path = Path(os.environ.get("SCENARIO_SCRIPT", str(directory.parent / "demo_script.yaml")))
-    if not path.is_file():
-        return None
-    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    events = raw.get("events") or []
-    by_id = {scenario.id: scenario for scenario in scenarios}
-    ordered = sorted(events, key=lambda event: int(event["at_s"]))
-    missing = [str(event["scenario"]) for event in ordered if event["scenario"] not in by_id]
-    if missing:
-        raise ValueError(f"{path.name}: unknown scenarios {sorted(set(missing))}")
-    return [by_id[str(event["scenario"])] for event in ordered]
+    return results, used
 
 
 def script_schedule(scenarios: tuple[Scenario, ...]) -> list[Scenario]:
-    scripted = _script_events(scenarios)
-    if scripted is not None:
-        return scripted
-    return sorted(
-        [scenario for scenario in scenarios if scenario.demo_slot is not None],
-        key=lambda item: (item.demo_slot or 0, item.id),
-    )
+    """Scenarios in script firing order (repeats kept), derived from ``plan_script``."""
+    by_id = {scenario.id: scenario for scenario in scenarios}
+    return [by_id[scenario_id] for _offset, scenario_id, _occ in plan_script(scenarios, seed=0)]
