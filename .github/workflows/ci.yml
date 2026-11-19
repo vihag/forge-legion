@@ -108,7 +108,6 @@ jobs:
 
           assert fetch(f"http://nginx:{public_port}/case/v1/cases") == 404
           assert fetch(f"http://nginx:{public_port}/splunk/v1/alerts") == 404
-          mcp_headers = {"Authorization": f"Bearer {token}"} if token else {}
           init = json.dumps(
               {
                   "jsonrpc": "2.0",
