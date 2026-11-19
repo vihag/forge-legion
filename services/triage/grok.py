@@ -121,14 +121,19 @@ class StreamFixtureGrokClient:
         return None
 
     def assess(self, user_message: str, *, evidence_ids: set[str]) -> GrokResponse:
-        del user_message, evidence_ids
+        del user_message
         from services.mock_splunk.stream import fixture_grok_for_alert
 
         alert = self._bound_alert
         if alert is None:
             raise GrokCallError("stream fixture client has no bound alert")
         scenario_id = alert.scenario_id
-        payload = fixture_grok_for_alert(alert.alert_id, scenario_id)
+        refs = sorted(evidence_ids)
+        payload = fixture_grok_for_alert(
+            alert.alert_id,
+            scenario_id,
+            evidence_ids=refs,
+        )
         if payload is None:
             raise GrokCallError(
                 "no stream fixture for alert",

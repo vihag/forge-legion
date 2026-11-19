@@ -120,7 +120,12 @@ def _build_fixture_payload(scenario: Scenario, evidence_ids: list[str]) -> dict[
     }
 
 
-def fixture_grok_for_alert(alert_id: str, scenario_id: str | None) -> dict[str, Any] | None:
+def fixture_grok_for_alert(
+    alert_id: str,
+    scenario_id: str | None,
+    *,
+    evidence_ids: list[str] | None = None,
+) -> dict[str, Any] | None:
     if alert_id in _REGISTRY:
         return copy.deepcopy(_REGISTRY[alert_id])
     if scenario_id is None:
@@ -128,7 +133,11 @@ def fixture_grok_for_alert(alert_id: str, scenario_id: str | None) -> dict[str, 
     scenario = scenario_by_id(scenario_id)
     if scenario is None:
         return None
-    return _build_fixture_payload(scenario, [])
+    # Worker processes lack the emitter-side registry; use live Splunk evidence ids.
+    refs = list(evidence_ids or [])
+    if not refs:
+        return None
+    return _build_fixture_payload(scenario, refs)
 
 
 def _weighted_pick(rng: random.Random, scenarios: tuple[Scenario, ...]) -> Scenario:
