@@ -25,6 +25,7 @@ from contracts.models import (
     Finding,
     FindingCreate,
     HealthResponse,
+    Metrics,
     ReviewFlagCreate,
     Severity,
     SoarSubmission,
@@ -289,6 +290,19 @@ def list_events(
     limit: Annotated[int, Query(ge=1, le=EVENT_PAGE_MAX)] = EVENT_PAGE_DEFAULT,
 ) -> EventPage:
     return service.list_events(after_id=after_id, case_id=case_id, limit=limit)
+
+
+@router.get(
+    "/metrics",
+    response_model=Metrics,
+    operation_id="get_metrics",
+    responses=_errors(422),
+)
+def get_metrics(
+    service: ServiceDep,
+    since: Annotated[str | None, Query(min_length=1)] = None,
+) -> Metrics:
+    return service.get_metrics(since=since)
 
 
 def healthz() -> HealthResponse:

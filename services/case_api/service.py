@@ -5,7 +5,8 @@ Routes, bots, and UIs call this service. They do not decide state.
 
 import os
 import sqlite3
-from datetime import UTC, datetime
+import statistics
+from datetime import UTC, datetime, timedelta
 from typing import Any, Never
 
 from contracts.mock_soar import SoarApproval, SoarSubmissionRequest
@@ -30,10 +31,18 @@ from contracts.models import (
     Finding,
     FindingCreate,
     FindingKind,
+    Metrics,
+    MetricsAgent,
+    MetricsAssumptions,
+    MetricsCounts,
+    MetricsRecentCase,
+    MetricsTokens,
+    ResolveTimingStats,
     ReviewFlagCreate,
     Severity,
     SoarSubmission,
     SoarSubmitRequest,
+    TimingStats,
     TriageCreate,
 )
 from services.case_api.errors import (
@@ -622,6 +631,230 @@ class CaseService:
             )
         next_after_id = items[-1].id if items else after_id
         return EventPage(items=items, next_after_id=next_after_id)
+
+    def get_metrics(self, *, since: str | None) -> Metrics:
+        if since is not None:
+            self._parse_iso_timestamp(since)
+        now = utc_now()
+        agents_since = self._iso_shift(now, minutes=-15)
+        with self._store.transaction() as conn:
+            cases = self._store.list_cases_for_metrics(conn, since=since)
+            case_ids = [case.id for case in cases]
+            audit_events = self._store.list_audit_for_case_ids(conn, case_ids)
+            recent_cases = self._store.list_recent_cases(conn, 20)
+            agent_events = self._store.list_audit_since(conn, agents_since)
+        return self._build_metrics(
+            cases=cases,
+            audit_events=audit_events,
+            recent_cases=recent_cases,
+            agent_events=agent_events,
+        )
+
+    def _parse_iso_timestamp(self, value: str) -> datetime:
+        raw = value
+        if raw.endswith("Z"):
+            raw = f"{raw[:-1]}+00:00"
+        try:
+            parsed = datetime.fromisoformat(raw)
+        except ValueError as exc:
+            raise DomainValidationError(
+                "invalid timestamp",
+                details={"since": value},
+            ) from exc
+        return parsed
+
+    def _iso_shift(self, ts: str, *, minutes: int) -> str:
+        dt = self._parse_iso_timestamp(ts)
+        shifted = dt + timedelta(minutes=minutes)
+        return shifted.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    @staticmethod
+    def _event_start(case: Case) -> str:
+        return case.alert_time if case.alert_time is not None else case.created_at
+
+    @staticmethod
+    def _seconds_delta(start: str, end: str) -> float:
+        start_raw = start[:-1] + "+00:00" if start.endswith("Z") else start
+        end_raw = end[:-1] + "+00:00" if end.endswith("Z") else end
+        begin = datetime.fromisoformat(start_raw)
+        finish = datetime.fromisoformat(end_raw)
+        return (finish - begin).total_seconds()
+
+    @staticmethod
+    def _timing_stats(values: list[float]) -> TimingStats:
+        if not values:
+            return TimingStats(n=0, median=None, average=None)
+        median = float(statistics.median(values))
+        average = sum(values) / len(values)
+        return TimingStats(
+            n=len(values),
+            median=round(median, 1),
+            average=round(average, 1),
+        )
+
+    def _build_metrics(
+        self,
+        *,
+        cases: list[Case],
+        audit_events: list[AuditEvent],
+        recent_cases: list[Case],
+        agent_events: list[AuditEvent],
+    ) -> Metrics:
+        by_status = {status.value: 0 for status in CaseStatus}
+        by_route = {"autonomous": 0, "collaborative": 0, "review": 0}
+        auto_resolved = 0
+        collaborative_open = 0
+        needs_review = 0
+        uplifts: dict[str, int] = {}
+        downgrades = 0
+
+        for case in cases:
+            by_status[case.status.value] += 1
+            if case.route is not None:
+                by_route[case.route] += 1
+            if case.status == CaseStatus.AUTO_RESOLVED:
+                auto_resolved += 1
+            if case.status == CaseStatus.TRIAGED and case.route == "collaborative":
+                collaborative_open += 1
+            if case.status == CaseStatus.NEEDS_REVIEW:
+                needs_review += 1
+            if case.triage_severity is not None:
+                splunk_rank = _SEVERITY_RANK[case.splunk_severity]
+                triage_rank = _SEVERITY_RANK[case.triage_severity]
+                if triage_rank > splunk_rank:
+                    key = f"{case.splunk_severity}->{case.triage_severity}"
+                    uplifts[key] = uplifts.get(key, 0) + 1
+                elif triage_rank < splunk_rank:
+                    downgrades += 1
+
+        events_by_case: dict[int, list[AuditEvent]] = {}
+        for event in audit_events:
+            if event.case_id is None:
+                continue
+            events_by_case.setdefault(event.case_id, []).append(event)
+
+        triage_deltas: list[float] = []
+        ai_only_deltas: list[float] = []
+        ai_plus_human_deltas: list[float] = []
+
+        for case in cases:
+            start = self._event_start(case)
+            case_events = events_by_case.get(case.id, [])
+            triage_ts = next(
+                (event.ts for event in case_events if event.type == EVENT_TRIAGED),
+                None,
+            )
+            if triage_ts is not None:
+                triage_deltas.append(self._seconds_delta(start, triage_ts))
+            auto_ts = next(
+                (event.ts for event in case_events if event.type == EVENT_AUTO_RESOLVED),
+                None,
+            )
+            if auto_ts is not None:
+                ai_only_deltas.append(self._seconds_delta(start, auto_ts))
+            approve_ts = next(
+                (event.ts for event in case_events if event.type == EVENT_APPROVED),
+                None,
+            )
+            if approve_ts is not None:
+                ai_plus_human_deltas.append(self._seconds_delta(start, approve_ts))
+
+        prompt_total = 0
+        completion_total = 0
+        token_cases = 0
+        for case in cases:
+            prompt = case.prompt_tokens or 0
+            completion = case.completion_tokens or 0
+            if case.prompt_tokens is not None or case.completion_tokens is not None:
+                token_cases += 1
+            prompt_total += prompt
+            completion_total += completion
+        token_total = prompt_total + completion_total
+        per_case_average = (
+            None if token_cases == 0 else round(token_total / token_cases, 1)
+        )
+
+        cost_usd = self._metrics_cost_usd(prompt_total, completion_total)
+        minutes_per_alert = int(os.environ.get("MINUTES_PER_ALERT", "15"))
+        auto_enabled = os.environ.get("AUTO_RESOLVE_ENABLED", "0").strip() == "1"
+
+        agent_map: dict[tuple[str, str], MetricsAgent] = {}
+        for event in agent_events:
+            key = (event.actor.id, event.actor.type)
+            existing = agent_map.get(key)
+            if existing is None:
+                agent_map[key] = MetricsAgent(
+                    actor_id=event.actor.id,
+                    type=event.actor.type,
+                    events=1,
+                    last_seen=event.ts,
+                )
+            else:
+                last_seen = existing.last_seen
+                if event.ts > last_seen:
+                    last_seen = event.ts
+                agent_map[key] = MetricsAgent(
+                    actor_id=existing.actor_id,
+                    type=existing.type,
+                    events=existing.events + 1,
+                    last_seen=last_seen,
+                )
+        agents = sorted(agent_map.values(), key=lambda item: item.last_seen, reverse=True)
+
+        recent = [
+            MetricsRecentCase(
+                id=case.id,
+                alert_id=case.alert_id,
+                title=case.title,
+                status=case.status,
+                route=case.route,
+                splunk_severity=case.splunk_severity,
+                triage_severity=case.triage_severity,
+                verdict=case.verdict,
+                updated_at=case.updated_at,
+            )
+            for case in recent_cases
+        ]
+
+        return Metrics(
+            counts=MetricsCounts(
+                total=len(cases),
+                by_status=by_status,
+                by_route=by_route,
+                auto_resolved=auto_resolved,
+                collaborative_open=collaborative_open,
+                needs_review=needs_review,
+            ),
+            uplifts=uplifts,
+            downgrades=downgrades,
+            time_to_triage_s=self._timing_stats(triage_deltas),
+            time_to_resolve_s=ResolveTimingStats(
+                ai_only=self._timing_stats(ai_only_deltas),
+                ai_plus_human=self._timing_stats(ai_plus_human_deltas),
+            ),
+            tokens=MetricsTokens(
+                prompt=prompt_total,
+                completion=completion_total,
+                total=token_total,
+                per_case_average=per_case_average,
+            ),
+            cost_usd=cost_usd,
+            auto_resolve_enabled=auto_enabled,
+            minutes_saved_estimate=auto_resolved * minutes_per_alert,
+            assumptions=MetricsAssumptions(minutes_per_alert=minutes_per_alert),
+            agents=agents,
+            recent=recent,
+        )
+
+    def _metrics_cost_usd(self, prompt: int, completion: int) -> float | None:
+        in_raw = os.environ.get("GROK_PRICE_INPUT_PER_MTOK", "").strip()
+        out_raw = os.environ.get("GROK_PRICE_OUTPUT_PER_MTOK", "").strip()
+        if not in_raw or not out_raw:
+            return None
+        in_price = float(in_raw)
+        out_price = float(out_raw)
+        total = prompt * in_price / 1_000_000 + completion * out_price / 1_000_000
+        return round(total, 4)
 
     def _require_case(self, conn: sqlite3.Connection, case_id: int) -> Case:
         case = self._store.get_case(conn, case_id)

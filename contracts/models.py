@@ -275,3 +275,68 @@ class ErrorResponse(APIModel):
 
 class HealthResponse(APIModel):
     status: Literal["ok"]
+
+
+class TimingStats(APIModel):
+    n: int = Field(ge=0)
+    median: float | None = None
+    average: float | None = None
+
+
+class MetricsCounts(APIModel):
+    total: int = Field(ge=0)
+    by_status: dict[str, int]
+    by_route: dict[str, int]
+    auto_resolved: int = Field(ge=0)
+    collaborative_open: int = Field(ge=0)
+    needs_review: int = Field(ge=0)
+
+
+class ResolveTimingStats(APIModel):
+    ai_only: TimingStats
+    ai_plus_human: TimingStats
+
+
+class MetricsTokens(APIModel):
+    prompt: int = Field(ge=0)
+    completion: int = Field(ge=0)
+    total: int = Field(ge=0)
+    per_case_average: float | None = None
+
+
+class MetricsAssumptions(APIModel):
+    minutes_per_alert: int = Field(ge=0)
+
+
+class MetricsAgent(APIModel):
+    actor_id: str
+    type: ActorType
+    events: int = Field(ge=0)
+    last_seen: str
+
+
+class MetricsRecentCase(APIModel):
+    id: int
+    alert_id: str
+    title: str
+    status: CaseStatus
+    route: Route | None = None
+    splunk_severity: Severity
+    triage_severity: Severity | None = None
+    verdict: Verdict | None = None
+    updated_at: str
+
+
+class Metrics(APIModel):
+    counts: MetricsCounts
+    uplifts: dict[str, int]
+    downgrades: int = Field(ge=0)
+    time_to_triage_s: TimingStats
+    time_to_resolve_s: ResolveTimingStats
+    tokens: MetricsTokens
+    cost_usd: float | None = None
+    auto_resolve_enabled: bool
+    minutes_saved_estimate: int = Field(ge=0)
+    assumptions: MetricsAssumptions
+    agents: list[MetricsAgent]
+    recent: list[MetricsRecentCase]

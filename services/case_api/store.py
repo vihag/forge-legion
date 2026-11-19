@@ -897,6 +897,53 @@ class Store:
             ).fetchall()
         return [_audit_from_row(row) for row in rows]
 
+    def list_cases_for_metrics(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        since: str | None,
+    ) -> list[Case]:
+        if since is None:
+            rows = conn.execute("SELECT * FROM cases ORDER BY id").fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM cases WHERE created_at >= ? ORDER BY id",
+                (since,),
+            ).fetchall()
+        return [_case_from_row(row) for row in rows]
+
+    def list_audit_for_case_ids(
+        self,
+        conn: sqlite3.Connection,
+        case_ids: list[int],
+    ) -> list[AuditEvent]:
+        if not case_ids:
+            return []
+        placeholders = ",".join("?" * len(case_ids))
+        rows = conn.execute(
+            f"SELECT * FROM audit_events WHERE case_id IN ({placeholders}) ORDER BY id",
+            case_ids,
+        ).fetchall()
+        return [_audit_from_row(row) for row in rows]
+
+    def list_recent_cases(self, conn: sqlite3.Connection, limit: int) -> list[Case]:
+        rows = conn.execute(
+            "SELECT * FROM cases ORDER BY updated_at DESC, id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [_case_from_row(row) for row in rows]
+
+    def list_audit_since(self, conn: sqlite3.Connection, since_ts: str) -> list[AuditEvent]:
+        rows = conn.execute(
+            "SELECT * FROM audit_events WHERE ts >= ? ORDER BY id",
+            (since_ts,),
+        ).fetchall()
+        return [_audit_from_row(row) for row in rows]
+
+    def count_audit_events(self, conn: sqlite3.Connection) -> int:
+        row = conn.execute("SELECT COUNT(*) AS n FROM audit_events").fetchone()
+        return 0 if row is None else _cell_int(row, "n")
+
     def _must_case(self, conn: sqlite3.Connection, case_id: int) -> Case:
         case = self.get_case(conn, case_id)
         if case is None:
