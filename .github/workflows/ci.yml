@@ -92,13 +92,15 @@ jobs:
           python - <<'PY'
           import json
           import os
+          import urllib.parse
           import urllib.request
 
           base = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8080").rstrip("/")
-          with urllib.request.urlopen(f"{base}/case/v1/cases") as resp:
+          case_query = urllib.parse.urlencode({"limit": 50, "offset": 0})
+          with urllib.request.urlopen(f"{base}/case/v1/cases?{case_query}") as resp:
               cases = json.loads(resp.read())
           assert cases.get("total") == 0, cases
-          with urllib.request.urlopen(f"{base}/soar/v1/submissions") as resp:
+          with urllib.request.urlopen(f"{base}/soar/v1/submissions?case_id=1") as resp:
               soar = json.loads(resp.read())
           assert soar.get("items") == [], soar
           PY
