@@ -1,0 +1,546 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FORGE Mock SOAR",
+    "description": "Mock SOAR submission API.",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v1/submissions": {
+      "post": {
+        "tags": [
+          "soar"
+        ],
+        "summary": "Submit",
+        "operationId": "submit_submission",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SoarSubmissionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarReceipt"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarReceipt"
+                }
+              }
+            },
+            "description": "Created"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "soar"
+        ],
+        "summary": "List Submissions",
+        "operationId": "list_submissions",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarRecordList"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        }
+      }
+    },
+    "/v1/submissions/{soar_case_id}": {
+      "get": {
+        "tags": [
+          "soar"
+        ],
+        "summary": "Get Submission",
+        "operationId": "get_submission",
+        "parameters": [
+          {
+            "name": "soar_case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Soar Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarRecord"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reset": {
+      "post": {
+        "tags": [
+          "soar"
+        ],
+        "summary": "Reset",
+        "operationId": "reset_submissions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": " Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoarResetResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Healthz",
+        "operationId": "healthz",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Actor": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "analyst",
+              "agent",
+              "system"
+            ],
+            "title": "Type"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "type"
+        ],
+        "title": "Actor"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "type": "string",
+            "title": "Error"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "error",
+          "message"
+        ],
+        "title": "ErrorResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse"
+      },
+      "SoarApproval": {
+        "properties": {
+          "decision_id": {
+            "type": "integer",
+            "title": "Decision Id"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject"
+            ],
+            "title": "Decision"
+          },
+          "approver": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "decided_at": {
+            "type": "string",
+            "title": "Decided At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "decision_id",
+          "decision",
+          "approver",
+          "decided_at"
+        ],
+        "title": "SoarApproval"
+      },
+      "SoarReceipt": {
+        "properties": {
+          "soar_case_id": {
+            "type": "string",
+            "title": "Soar Case Id"
+          },
+          "case_id": {
+            "type": "integer",
+            "title": "Case Id"
+          },
+          "created": {
+            "type": "boolean",
+            "title": "Created"
+          },
+          "recorded_at": {
+            "type": "string",
+            "title": "Recorded At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "soar_case_id",
+          "case_id",
+          "created",
+          "recorded_at"
+        ],
+        "title": "SoarReceipt"
+      },
+      "SoarRecord": {
+        "properties": {
+          "soar_case_id": {
+            "type": "string",
+            "title": "Soar Case Id"
+          },
+          "case_id": {
+            "type": "integer",
+            "title": "Case Id"
+          },
+          "alert_id": {
+            "type": "string",
+            "title": "Alert Id"
+          },
+          "disposition_id": {
+            "type": "integer",
+            "title": "Disposition Id"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "false_positive",
+              "benign",
+              "escalate",
+              "contain"
+            ],
+            "title": "Action"
+          },
+          "approval": {
+            "$ref": "#/components/schemas/SoarApproval"
+          },
+          "submitted_by": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "recorded_at": {
+            "type": "string",
+            "title": "Recorded At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "soar_case_id",
+          "case_id",
+          "alert_id",
+          "disposition_id",
+          "action",
+          "approval",
+          "submitted_by",
+          "recorded_at"
+        ],
+        "title": "SoarRecord"
+      },
+      "SoarRecordList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SoarRecord"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SoarRecordList"
+      },
+      "SoarResetResponse": {
+        "properties": {
+          "submissions": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Submissions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "submissions"
+        ],
+        "title": "SoarResetResponse"
+      },
+      "SoarSubmissionRequest": {
+        "properties": {
+          "case_id": {
+            "type": "integer",
+            "title": "Case Id"
+          },
+          "alert_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Alert Id"
+          },
+          "disposition_id": {
+            "type": "integer",
+            "title": "Disposition Id"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "false_positive",
+              "benign",
+              "escalate",
+              "contain"
+            ],
+            "title": "Action"
+          },
+          "approval": {
+            "$ref": "#/components/schemas/SoarApproval"
+          },
+          "submitted_by": {
+            "$ref": "#/components/schemas/Actor"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_id",
+          "alert_id",
+          "disposition_id",
+          "action",
+          "approval",
+          "submitted_by"
+        ],
+        "title": "SoarSubmissionRequest"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

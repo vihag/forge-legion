@@ -2,7 +2,7 @@
 
 FORGE × LEGION: agentic SOC triage and investigation on legacy Splunk, powered by Grok Bots, LangGraph and the Grok API.
 
-This repository ships the C1 case store and case API (`/v1`), the C2 Mock Splunk service, and the C3 LangGraph triage runner. The binding contracts are [`contracts/C1-contract.md`](contracts/C1-contract.md), [`contracts/C2-contract.md`](contracts/C2-contract.md), and [`contracts/C3-contract.md`](contracts/C3-contract.md).
+This repository ships the C1 case store and case API (`/v1`), the C2 Mock Splunk service, the C3 LangGraph triage runner, C4 Mock SOAR, and the MCP adapter. The binding contracts are [`contracts/C1-contract.md`](contracts/C1-contract.md), [`contracts/C2-contract.md`](contracts/C2-contract.md), [`contracts/C3-contract.md`](contracts/C3-contract.md), and [`contracts/C4-contract.md`](contracts/C4-contract.md).
 
 ## Setup
 
@@ -29,6 +29,15 @@ Mock Splunk listens on port 8001:
 ```bash
 uvicorn services.mock_splunk.app:app --port 8001
 ```
+
+Mock SOAR (default port 8002) and the MCP adapter (default port 8003):
+
+```bash
+make run-soar
+CASE_API_URL=http://127.0.0.1:8000 make run-mcp
+```
+
+Point the Case API at Mock SOAR with `SOAR_CLIENT=http` and `MOCK_SOAR_URL`. Optional `MCP_ADAPTER_TOKEN` protects `POST /mcp` when the adapter is exposed through a tunnel.
 
 ## Reset
 

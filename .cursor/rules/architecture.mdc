@@ -17,3 +17,5 @@ These rules apply to the FORGE case store, the `/v1` case API, and Mock Splunk.
 8. Mock Splunk (`services/mock_splunk`) is a read-only data source plus `reset` and `replay`. It holds no case logic and writes nothing to the Case API.
 9. A new Mock Splunk source follows `contracts/C2-contract.md` §4 only: one module, one fixture file, and one registry line. Do not change routes, shared models, the OpenAPI spec, or tests to add a source.
 10. LangGraph triage (`services/triage`) talks to Mock Splunk and the Case API over HTTP only. Routing policy lives in `config/routing.yaml` and `services/triage/routing.py`; the model's `recommended_route` is advisory.
+11. MCP adapter (`services/mcp_adapter`): one tool equals one Case API HTTP call, with no business logic, state, or retries. Approval stays on the Case API (no approve/reject tools). The adapter imports nothing from `services.case_api`.
+12. Mock SOAR (`services/mock_soar`) owns SOAR idempotency on `case_id` and re-checks approval payloads; it never calls back into the Case API.

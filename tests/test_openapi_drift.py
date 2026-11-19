@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from scripts.export_openapi import SPECS, canonical_openapi
+from scripts.export_openapi import SPECS, canonical_mcp_tools, canonical_openapi
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -43,17 +43,35 @@ CASE_GETS_WITH_422 = (
 )
 
 
-@pytest.mark.parametrize("spec_name", ["case_api", "mock_splunk"])
+MOCK_SOAR_METHODS = {
+    "/healthz": {"get"},
+    "/v1/submissions": {"get", "post"},
+    "/v1/submissions/{soar_case_id}": {"get"},
+    "/v1/reset": {"post"},
+}
+
+
+@pytest.mark.parametrize("spec_name", ["case_api", "mock_splunk", "mock_soar"])
 def test_committed_openapi_matches_app(spec_name: str) -> None:
     relative = SPECS[spec_name]
     committed = (ROOT / relative).read_text(encoding="utf-8")
     assert canonical_openapi(spec_name) == committed
     spec = json.loads(committed)
     paths = spec["paths"]
-    required = CASE_METHODS if spec_name == "case_api" else MOCK_METHODS
+    if spec_name == "case_api":
+        required = CASE_METHODS
+    elif spec_name == "mock_splunk":
+        required = MOCK_METHODS
+    else:
+        required = MOCK_SOAR_METHODS
     for path, methods in required.items():
         assert path in paths
         assert methods <= set(paths[path])
     if spec_name == "case_api":
         for path in CASE_GETS_WITH_422:
             assert "422" in paths[path]["get"]["responses"]
+
+
+def test_committed_mcp_tools_match_server() -> None:
+    committed = (ROOT / "contracts" / "mcp_tools.json").read_text(encoding="utf-8")
+    assert canonical_mcp_tools() == committed

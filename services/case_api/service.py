@@ -7,6 +7,7 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import Any, Never
 
+from contracts.mock_soar import SoarApproval, SoarSubmissionRequest
 from contracts.models import (
     Actor,
     AuditEvent,
@@ -340,16 +341,35 @@ class CaseService:
         now = utc_now()
         with self._store.transaction() as conn:
             case = self._require_case(conn, case_id)
-            to_status = self._require_transition(SUBMIT_TO_SOAR, case.status)
             existing = self._store.get_soar(conn, case_id)
             if existing is not None:
                 raise Duplicate(
                     "case already submitted to SOAR",
                     details={"case_id": case_id, "soar_case_id": existing.soar_case_id},
                 )
+            to_status = self._require_transition(SUBMIT_TO_SOAR, case.status)
             disposition = self._require_open_disposition(conn, case_id)
+            decision = self._store.get_decision_for_disposition(conn, disposition.id)
+            if decision is None:
+                raise Conflict(
+                    "no decision for open disposition",
+                    details={"case_id": case_id, "disposition_id": disposition.id},
+                )
+            soar_request = SoarSubmissionRequest(
+                case_id=case_id,
+                alert_id=case.alert_id,
+                disposition_id=disposition.id,
+                action=disposition.action,
+                approval=SoarApproval(
+                    decision_id=decision.id,
+                    decision=decision.decision,
+                    approver=Actor(id=decision.analyst_id, type="analyst"),
+                    decided_at=decision.created_at,
+                ),
+                submitted_by=body.actor,
+            )
             try:
-                soar_case_id = self._soar.submit(case_id)
+                soar_case_id = self._soar.submit(soar_request)
             except SoarError as exc:
                 raise SoarUnavailable(exc.message, details={"case_id": case_id}) from exc
             try:
