@@ -94,6 +94,7 @@ services:
       - "${GATEWAY_BIND}:${GATEWAY_PUBLIC_PORT}:${GATEWAY_PORT}"
     volumes:
       - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ../console:/app/console:ro
     depends_on:
       case_api:
         condition: service_healthy

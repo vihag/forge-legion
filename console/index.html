@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FORGE SOC Command Center</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="top-bar">
+      <h1>FORGE Command Center</h1>
+      <div class="badges">
+        <span class="badge shift">SIMULATED SHIFT</span>
+        <span id="auto-off-banner" class="banner hidden">AUTO-RESOLVE OFF</span>
+      </div>
+    </header>
+    <main>
+      <section class="kpi-grid" aria-label="Key metrics">
+        <article class="tile" id="tile-total">
+          <h2>Total cases</h2>
+          <p class="value" data-field="counts.total">—</p>
+        </article>
+        <article class="tile" id="tile-auto">
+          <h2>Auto-resolved</h2>
+          <p class="value" data-field="counts.auto_resolved">—</p>
+        </article>
+        <article class="tile" id="tile-collab">
+          <h2>Collaborative open</h2>
+          <p class="value" data-field="counts.collaborative_open">—</p>
+        </article>
+        <article class="tile" id="tile-review">
+          <h2>Needs review</h2>
+          <p class="value" data-field="counts.needs_review">—</p>
+        </article>
+        <article class="tile" id="tile-uplift">
+          <h2>Uplifts</h2>
+          <p class="value" id="uplift-summary">—</p>
+        </article>
+        <article class="tile" id="tile-minutes">
+          <h2>Minutes saved (est.)</h2>
+          <p class="value" data-field="minutes_saved_estimate">—</p>
+          <p class="hint" id="minutes-hint">
+            Assumes <span data-field="assumptions.minutes_per_alert">15</span> min saved per
+            auto-resolved alert
+          </p>
+        </article>
+      </section>
+      <section class="timing" aria-label="Timing statistics">
+        <h2>Timing (seconds)</h2>
+        <dl>
+          <div>
+            <dt>Time to triage</dt>
+            <dd id="time-triage">—</dd>
+          </div>
+          <div>
+            <dt>Time to resolve (AI only)</dt>
+            <dd id="time-ai-only">—</dd>
+          </div>
+          <div>
+            <dt>Time to resolve (AI + human)</dt>
+            <dd id="time-ai-human">—</dd>
+          </div>
+        </dl>
+      </section>
+      <section class="panels">
+        <article>
+          <h2>Live feed</h2>
+          <table id="recent-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Alert</th>
+                <th>Status</th>
+                <th>Route</th>
+                <th>Verdict</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </article>
+        <article>
+          <h2>Active agents (15 min)</h2>
+          <ul id="agents-list"></ul>
+        </article>
+      </section>
+    </main>
+    <footer>
+      <p>Polling <code>/case/v1/metrics</code> every 5s</p>
+    </footer>
+    <script src="app.js"></script>
+  </body>
+</html>

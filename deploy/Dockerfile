@@ -5,6 +5,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY contracts ./contracts
 COPY config ./config
+COPY console ./console
 COPY db ./db
 COPY services ./services
 COPY scripts ./scripts
