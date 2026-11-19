@@ -12,6 +12,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from contracts.mock_splunk import Alert, Entities, SplunkEvidence
 from contracts.scenarios import Scenario
 from services.mock_splunk.scenarios import (
@@ -251,7 +253,26 @@ def generate(
     return results
 
 
+def _script_events(scenarios: tuple[Scenario, ...]) -> list[Scenario] | None:
+    """Events from ``demo_script.yaml`` next to the scenario dir, in ``at_s`` order."""
+    _, directory = _scenario_paths()
+    path = Path(os.environ.get("SCENARIO_SCRIPT", str(directory.parent / "demo_script.yaml")))
+    if not path.is_file():
+        return None
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    events = raw.get("events") or []
+    by_id = {scenario.id: scenario for scenario in scenarios}
+    ordered = sorted(events, key=lambda event: int(event["at_s"]))
+    missing = [str(event["scenario"]) for event in ordered if event["scenario"] not in by_id]
+    if missing:
+        raise ValueError(f"{path.name}: unknown scenarios {sorted(set(missing))}")
+    return [by_id[str(event["scenario"])] for event in ordered]
+
+
 def script_schedule(scenarios: tuple[Scenario, ...]) -> list[Scenario]:
+    scripted = _script_events(scenarios)
+    if scripted is not None:
+        return scripted
     return sorted(
         [scenario for scenario in scenarios if scenario.demo_slot is not None],
         key=lambda item: (item.demo_slot or 0, item.id),

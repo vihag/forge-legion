@@ -1,4 +1,4 @@
-.PHONY: test lint mypy triage-smoke triage-record openapi run-soar run-mcp e2e-soar up up-public down reset health triage-seed compose-config env-merge env-set gen-secret scenarios-check
+.PHONY: test lint mypy triage-smoke triage-record openapi run-soar run-mcp e2e-soar up up-public down reset health triage-seed compose-config env-merge env-set gen-secret scenarios-check stream-start stream-script stream-stop stream-status
 
 PYTHON ?= python3
 ENV_FILE ?= .env.local
@@ -94,6 +94,10 @@ compose-config:
 stream-start: _check_env
 	@set -a && . ./$(ENV_FILE) && set +a; \
 	curl -sf -X POST "$$PUBLIC_BASE_URL/splunk/v1/stream/start" -H 'content-type: application/json' -d '{}'
+
+stream-script: _check_env
+	@set -a && . ./$(ENV_FILE) && set +a; \
+	curl -sf -X POST "$$PUBLIC_BASE_URL/splunk/v1/stream/start" -H 'content-type: application/json' -d '{"mode":"script"}'
 
 stream-stop: _check_env
 	@set -a && . ./$(ENV_FILE) && set +a; \
