@@ -8,7 +8,12 @@ from typing import Never
 from services.triage.clients import AlertNotFound, CaseApiClient, SplunkClient
 from services.triage.config import ConfigError, TriageSettings, load_settings, require_api_key
 from services.triage.graph import TriageDeps, run_triage
-from services.triage.grok import FixtureGrokClient, GrokClient, HttpGrokClient
+from services.triage.grok import (
+    FixtureGrokClient,
+    GrokClient,
+    HttpGrokClient,
+)
+from services.triage.worker import run_worker
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -16,9 +21,12 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="Run triage for one alert id")
     run.add_argument("--alert-id", required=True)
+    sub.add_parser("worker", help="Poll Mock Splunk and triage new alerts")
     args = parser.parse_args(argv)
     if args.command == "run":
         return _run_alert(args.alert_id)
+    if args.command == "worker":
+        return run_worker()
     _never(args.command)
 
 

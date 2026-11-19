@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from contracts.models import (
     AuditEvent,
+    AutoResolveCreate,
     Case,
     CaseCreate,
     CaseList,
@@ -156,6 +157,20 @@ def get_case(case_id: int, service: ServiceDep) -> Case:
 )
 def triage_case(case_id: int, body: TriageCreate, service: ServiceDep) -> Case:
     return service.triage_case(case_id, body)
+
+
+@router.post(
+    "/cases/{case_id}/auto-resolve",
+    response_model=Case,
+    operation_id="auto_resolve_case",
+    responses=_errors(403, 404, 409, 422),
+)
+def auto_resolve_case(
+    case_id: int,
+    body: AutoResolveCreate,
+    service: ServiceDep,
+) -> Case:
+    return service.auto_resolve_case(case_id, body)
 
 
 @router.post(

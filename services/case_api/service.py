@@ -3,6 +3,7 @@
 Routes, bots, and UIs call this service. They do not decide state.
 """
 
+import os
 import sqlite3
 from datetime import UTC, datetime
 from typing import Any, Never
@@ -11,6 +12,7 @@ from contracts.mock_soar import SoarApproval, SoarSubmissionRequest
 from contracts.models import (
     Actor,
     AuditEvent,
+    AutoResolveCreate,
     Case,
     CaseCreate,
     CaseList,
@@ -41,13 +43,16 @@ from services.case_api.errors import (
     Forbidden,
     IllegalTransition,
     InstructionMismatch,
+    NoAnalystApproval,
     NotFound,
+    PolicyGateFailed,
     SoarUnavailable,
 )
 from services.case_api.soar import SoarClient, SoarError
 from services.case_api.state import (
     ADD_EVIDENCE,
     APPROVE,
+    AUTO_RESOLVE,
     FLAG_REVIEW,
     PROPOSE_DISPOSITION,
     RECORD_FINDING,
@@ -74,6 +79,12 @@ EVENT_APPROVED = "disposition.approved"
 EVENT_REJECTED = "disposition.rejected"
 EVENT_SOAR = "soar.submitted"
 EVENT_REVIEW_FLAGGED = "case.review_flagged"
+EVENT_AUTO_RESOLVED = "case.auto_resolved"
+
+AUTO_RESOLVE_POLICY_ID = "autonomous-triage"
+AUTO_RESOLVE_ACTOR = Actor(id="policy:autonomous-triage", type="system")
+_SEVERITY_RANK = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+_GATE_IDS = tuple(f"G{index}" for index in range(1, 11))
 
 
 def utc_now() -> str:
@@ -164,6 +175,7 @@ class CaseService:
                     summary=body.summary,
                     splunk_severity=body.splunk_severity,
                     assigned_analyst=body.assigned_analyst,
+                    alert_time=body.alert_time,
                     status=CaseStatus.NEW.value,
                     created_at=now,
                     updated_at=now,
@@ -202,6 +214,16 @@ class CaseService:
                 model=body.model,
                 status=to_status.value,
                 updated_at=now,
+                model_requested=body.model_requested,
+                route=body.route,
+                rule=body.rule,
+                verdict=body.verdict,
+                recommended_action=body.recommended_action,
+                confidence=body.confidence,
+                privileged_account=body.privileged_account,
+                crown_jewel_asset=body.crown_jewel_asset,
+                prompt_tokens=body.prompt_tokens,
+                completion_tokens=body.completion_tokens,
             )
             self._audit(
                 conn,
@@ -391,9 +413,19 @@ class CaseService:
             disposition = self._require_open_disposition(conn, case_id)
             decision = self._store.get_decision_for_disposition(conn, disposition.id)
             if decision is None:
+                if case.status == CaseStatus.APPROVED:
+                    raise NoAnalystApproval(
+                        "no analyst approval stored for this case",
+                        details={"case_id": case_id, "disposition_id": disposition.id},
+                    )
                 raise Conflict(
                     "no decision for open disposition",
                     details={"case_id": case_id, "disposition_id": disposition.id},
+                )
+            if decision.decision != "approve":
+                raise NoAnalystApproval(
+                    "disposition was not approved by an analyst",
+                    details={"case_id": case_id, "decision": decision.decision},
                 )
             soar_request = SoarSubmissionRequest(
                 case_id=case_id,
@@ -469,6 +501,46 @@ class CaseService:
             )
         return CaseList(items=items, total=total)
 
+    def auto_resolve_case(self, case_id: int, body: AutoResolveCreate) -> Case:
+        if body.actor.type != "system" or body.actor.id != AUTO_RESOLVE_ACTOR.id:
+            raise Forbidden(
+                "only the autonomous-triage policy may auto-resolve",
+                details={"actor_type": body.actor.type, "actor_id": body.actor.id},
+            )
+        if body.policy_id != AUTO_RESOLVE_POLICY_ID:
+            raise DomainValidationError(
+                "unsupported policy_id",
+                details={"policy_id": body.policy_id},
+            )
+        now = utc_now()
+        with self._store.transaction() as conn:
+            case = self._require_case(conn, case_id)
+            failed = self._policy_gate_failed(conn, case, body.triage_evidence_id)
+            if failed:
+                raise PolicyGateFailed(
+                    "autonomous policy gate failed",
+                    details={"failed": failed},
+                )
+            to_status = self._require_transition(AUTO_RESOLVE, case.status)
+            updated = self._store.update_case_status(conn, case_id, to_status.value, now)
+            self._audit(
+                conn,
+                case_id=case_id,
+                ts=now,
+                event_type=EVENT_AUTO_RESOLVED,
+                actor=body.actor,
+                from_status=case.status.value,
+                to_status=to_status.value,
+                payload={
+                    "verdict": case.verdict,
+                    "policy_id": body.policy_id,
+                    "triage_evidence_id": body.triage_evidence_id,
+                    "route": case.route,
+                    "gate_checks": list(_GATE_IDS),
+                },
+            )
+            return updated
+
     def flag_review(self, case_id: int, body: ReviewFlagCreate) -> Case:
         now = utc_now()
         with self._store.transaction() as conn:
@@ -524,6 +596,17 @@ class CaseService:
                 decision=decision,
                 soar=self._store.get_soar(conn, case_id),
                 audit=self._store.list_history(conn, case_id),
+                alert_time=case.alert_time,
+                model_requested=case.model_requested,
+                route=case.route,
+                rule=case.rule,
+                verdict=case.verdict,
+                recommended_action=case.recommended_action,
+                confidence=case.confidence,
+                privileged_account=case.privileged_account,
+                crown_jewel_asset=case.crown_jewel_asset,
+                prompt_tokens=case.prompt_tokens,
+                completion_tokens=case.completion_tokens,
             )
 
     def list_events(self, *, after_id: int, case_id: int | None, limit: int) -> EventPage:
@@ -600,3 +683,39 @@ class CaseService:
     def _check_limit(self, limit: int, *, max_limit: int) -> None:
         if limit < 1 or limit > max_limit:
             raise DomainValidationError("invalid pagination", details={"limit": limit})
+
+    def _policy_gate_failed(
+        self,
+        conn: sqlite3.Connection,
+        case: Case,
+        triage_evidence_id: int,
+    ) -> list[str]:
+        failed: list[str] = []
+        enabled = os.environ.get("AUTO_RESOLVE_ENABLED", "0").strip() == "1"
+        if not enabled:
+            failed.append("G1")
+        if case.route != "autonomous":
+            failed.append("G2")
+        if case.verdict not in ("benign", "false_positive"):
+            failed.append("G3")
+        if case.recommended_action in ("escalate", "contain"):
+            failed.append("G4")
+        if case.triage_severity not in ("low", "medium"):
+            failed.append("G5")
+        if _SEVERITY_RANK[case.splunk_severity] > _SEVERITY_RANK["medium"]:
+            failed.append("G6")
+        if case.privileged_account is True:
+            failed.append("G7")
+        if case.crown_jewel_asset is True:
+            failed.append("G8")
+        min_conf = float(os.environ.get("AUTO_RESOLVE_MIN_CONFIDENCE", "0.8"))
+        if case.confidence is None or case.confidence < min_conf:
+            failed.append("G9")
+        evidence = self._store.get_evidence_by_id(conn, triage_evidence_id)
+        if (
+            evidence is None
+            or evidence.case_id != case.id
+            or evidence.source != "triage_assessment"
+        ):
+            failed.append("G10")
+        return failed

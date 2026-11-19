@@ -14,6 +14,7 @@ STATUSES = [
     "REJECTED",
     "SUBMITTED",
     "NEEDS_REVIEW",
+    "AUTO_RESOLVED",
 ]
 
 OPERATIONS = [
@@ -26,6 +27,7 @@ OPERATIONS = [
     "reject",
     "submit_to_soar",
     "flag_review",
+    "auto_resolve",
 ]
 
 # Resulting status for every allowed (operation, from_status) pair in §2.
@@ -48,6 +50,7 @@ DOCUMENTED: dict[tuple[str, str], str] = {
     ("approve", "DISPOSITION_PROPOSED"): "APPROVED",
     ("reject", "DISPOSITION_PROPOSED"): "REJECTED",
     ("submit_to_soar", "APPROVED"): "SUBMITTED",
+    ("auto_resolve", "TRIAGED"): "AUTO_RESOLVED",
 }
 
 

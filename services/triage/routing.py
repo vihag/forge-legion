@@ -19,8 +19,10 @@ class RuleWhen(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     privileged_account: bool | None = None
+    crown_jewel_asset: bool | None = None
     assessed_severity_in: SeverityList | None = None
     splunk_severity_in: SeverityList | None = None
+    verdict_in: list[str] | None = None
     confidence_below: float | None = None
 
 
@@ -37,6 +39,7 @@ class RoutingConfig(BaseModel):
 
     version: int
     privileged_account_patterns: list[str] = Field(min_length=1)
+    crown_jewel_hosts: list[str] = Field(default_factory=list)
     rules: list[RoutingRule] = Field(default_factory=list)
     default_route: Route
 
@@ -73,9 +76,11 @@ def _context(
 ) -> dict[str, Any]:
     return {
         "privileged_account": bool(facts.get("privileged_account")),
+        "crown_jewel_asset": bool(facts.get("crown_jewel_asset")),
         "assessed_severity": assessment.assessed_severity,
         "splunk_severity": splunk_severity,
         "assessment_confidence": assessment.assessment_confidence,
+        "verdict": assessment.verdict,
     }
 
 
@@ -83,6 +88,10 @@ def _matches(when: RuleWhen, context: dict[str, Any]) -> bool:
     checks: list[bool] = []
     if when.privileged_account is not None:
         checks.append(context["privileged_account"] is when.privileged_account)
+    if when.crown_jewel_asset is not None:
+        checks.append(context["crown_jewel_asset"] is when.crown_jewel_asset)
+    if when.verdict_in is not None:
+        checks.append(context["verdict"] in when.verdict_in)
     if when.assessed_severity_in is not None:
         checks.append(context["assessed_severity"] in when.assessed_severity_in)
     if when.splunk_severity_in is not None:

@@ -22,6 +22,8 @@ class TriageSettings:
     routing_path: Path
     grok_client: str = "http"
     grok_fixture_path: Path | None = None
+    triage_worker_poll_s: int = 5
+    triage_worker_concurrency: int = 1
 
 
 def load_settings() -> TriageSettings:
@@ -40,6 +42,8 @@ def load_settings() -> TriageSettings:
         grok_fixture_path=fixture_path,
         routing_config=load_routing(routing_path),
         routing_path=routing_path,
+        triage_worker_poll_s=int(os.environ.get("TRIAGE_WORKER_POLL_S", "5")),
+        triage_worker_concurrency=int(os.environ.get("TRIAGE_WORKER_CONCURRENCY", "1")),
     )
 
 

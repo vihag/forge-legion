@@ -12,6 +12,7 @@ APPROVE = "approve"
 REJECT = "reject"
 SUBMIT_TO_SOAR = "submit_to_soar"
 FLAG_REVIEW = "flag_review"
+AUTO_RESOLVE = "auto_resolve"
 
 # operation -> from_status -> to_status. None keeps the current status.
 TRANSITIONS: dict[str, dict[str, str | None]] = {
@@ -47,6 +48,9 @@ TRANSITIONS: dict[str, dict[str, str | None]] = {
     },
     SUBMIT_TO_SOAR: {
         "APPROVED": "SUBMITTED",
+    },
+    AUTO_RESOLVE: {
+        "TRIAGED": "AUTO_RESOLVED",
     },
 }
 

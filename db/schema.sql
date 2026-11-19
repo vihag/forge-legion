@@ -13,7 +13,18 @@ CREATE TABLE IF NOT EXISTS cases (
     assigned_analyst TEXT,
     status TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    alert_time TEXT,
+    model_requested TEXT,
+    route TEXT,
+    rule TEXT,
+    verdict TEXT,
+    recommended_action TEXT,
+    confidence REAL,
+    privileged_account INTEGER,
+    crown_jewel_asset INTEGER,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS evidence (

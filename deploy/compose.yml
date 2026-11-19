@@ -104,6 +104,24 @@ services:
       mcp:
         condition: service_healthy
 
+  triage_worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file:
+      - ../${ENV_FILE:-.env.local}
+    command:
+      - python
+      - -m
+      - services.triage
+      - worker
+    depends_on:
+      case_api:
+        condition: service_healthy
+      mock_splunk:
+        condition: service_healthy
+    restart: unless-stopped
+
   triage:
     profiles:
       - tools

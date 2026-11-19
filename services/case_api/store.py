@@ -27,8 +27,25 @@ from contracts.models import (
     Evidence,
     Finding,
     FindingKind,
+    RecommendedAction,
+    Route,
     Severity,
     SoarSubmission,
+    Verdict,
+)
+
+_CASES_MIGRATION: tuple[tuple[str, str], ...] = (
+    ("alert_time", "TEXT"),
+    ("model_requested", "TEXT"),
+    ("route", "TEXT"),
+    ("rule", "TEXT"),
+    ("verdict", "TEXT"),
+    ("recommended_action", "TEXT"),
+    ("confidence", "REAL"),
+    ("privileged_account", "INTEGER"),
+    ("crown_jewel_asset", "INTEGER"),
+    ("prompt_tokens", "INTEGER"),
+    ("completion_tokens", "INTEGER"),
 )
 
 _DROP_ORDER = (
@@ -92,6 +109,17 @@ def _cell_optional_int(row: sqlite3.Row, key: str) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int):
         raise TypeError(f"column {key} is not int")
     return value
+
+
+def _cell_optional_bool(row: sqlite3.Row, key: str) -> bool | None:
+    value: object = row[key]
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    raise TypeError(f"column {key} is not bool")
 
 
 def _cell_optional_float(row: sqlite3.Row, key: str) -> float | None:
@@ -197,6 +225,9 @@ def _decision_value(value: str) -> DecisionValue:
 
 
 def _case_from_row(row: sqlite3.Row) -> Case:
+    route_raw = _cell_optional_str(row, "route")
+    verdict_raw = _cell_optional_str(row, "verdict")
+    action_raw = _cell_optional_str(row, "recommended_action")
     return Case(
         id=_cell_int(row, "id"),
         alert_id=_cell_str(row, "alert_id"),
@@ -210,7 +241,65 @@ def _case_from_row(row: sqlite3.Row) -> Case:
         status=_status(_cell_str(row, "status")),
         created_at=_cell_str(row, "created_at"),
         updated_at=_cell_str(row, "updated_at"),
+        alert_time=_cell_optional_str(row, "alert_time"),
+        model_requested=_cell_optional_str(row, "model_requested"),
+        route=_optional_route(route_raw),
+        rule=_cell_optional_str(row, "rule"),
+        verdict=_optional_verdict(verdict_raw),
+        recommended_action=_optional_recommended_action(action_raw),
+        confidence=_cell_optional_float(row, "confidence"),
+        privileged_account=_cell_optional_bool(row, "privileged_account"),
+        crown_jewel_asset=_cell_optional_bool(row, "crown_jewel_asset"),
+        prompt_tokens=_cell_optional_int(row, "prompt_tokens"),
+        completion_tokens=_cell_optional_int(row, "completion_tokens"),
     )
+
+
+def _optional_route(value: str | None) -> Route | None:
+    if value is None:
+        return None
+    if value == "collaborative":
+        return "collaborative"
+    if value == "autonomous":
+        return "autonomous"
+    if value == "review":
+        return "review"
+    raise ValueError(f"invalid route {value}")
+
+
+def _optional_verdict(value: str | None) -> Verdict | None:
+    if value is None:
+        return None
+    if value == "benign":
+        return "benign"
+    if value == "false_positive":
+        return "false_positive"
+    if value == "suspicious":
+        return "suspicious"
+    if value == "malicious":
+        return "malicious"
+    raise ValueError(f"invalid verdict {value}")
+
+
+def _optional_recommended_action(value: str | None) -> RecommendedAction | None:
+    if value is None:
+        return None
+    if value == "none":
+        return "none"
+    if value == "escalate":
+        return "escalate"
+    if value == "contain":
+        return "contain"
+    raise ValueError(f"invalid recommended_action {value}")
+
+
+def _migrate_cases(conn: sqlite3.Connection) -> None:
+    rows = conn.execute("PRAGMA table_info(cases)").fetchall()
+    existing = {_cell_str(row, "name") for row in rows}
+    for column, col_type in _CASES_MIGRATION:
+        if column in existing:
+            continue
+        conn.execute(f"ALTER TABLE cases ADD COLUMN {column} {col_type}")
 
 
 def _summary_from_row(row: sqlite3.Row) -> CaseSummary:
@@ -331,6 +420,7 @@ class Store:
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.execute("PRAGMA busy_timeout = 5000")
         self._conn.executescript(_SCHEMA_SQL)
+        _migrate_cases(self._conn)
         self._lock = threading.Lock()
         self._closed = False
 
@@ -362,6 +452,7 @@ class Store:
                 for table in _DROP_ORDER:
                     self._conn.execute(f"DROP TABLE IF EXISTS {table}")
                 self._conn.executescript(_SCHEMA_SQL)
+                _migrate_cases(self._conn)
             finally:
                 self._conn.execute("PRAGMA foreign_keys = ON")
 
@@ -389,6 +480,7 @@ class Store:
         summary: str | None,
         splunk_severity: str,
         assigned_analyst: str | None,
+        alert_time: str | None,
         status: str,
         created_at: str,
         updated_at: str,
@@ -397,8 +489,8 @@ class Store:
             """
             INSERT INTO cases (
                 alert_id, title, summary, splunk_severity, assigned_analyst,
-                status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                status, created_at, updated_at, alert_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 alert_id,
@@ -409,6 +501,7 @@ class Store:
                 status,
                 created_at,
                 updated_at,
+                alert_time,
             ),
         )
         return self._must_case(conn, _last_id(cursor))
@@ -469,17 +562,58 @@ class Store:
         model: str,
         status: str,
         updated_at: str,
+        model_requested: str | None = None,
+        route: str | None = None,
+        rule: str | None = None,
+        verdict: str | None = None,
+        recommended_action: str | None = None,
+        confidence: float | None = None,
+        privileged_account: bool | None = None,
+        crown_jewel_asset: bool | None = None,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
     ) -> Case:
         conn.execute(
             """
             UPDATE cases
                SET triage_severity = ?, triage_rationale = ?, triage_model = ?,
-                   status = ?, updated_at = ?
+                   status = ?, updated_at = ?,
+                   model_requested = ?, route = ?, rule = ?,
+                   verdict = ?, recommended_action = ?, confidence = ?,
+                   privileged_account = ?, crown_jewel_asset = ?,
+                   prompt_tokens = ?, completion_tokens = ?
              WHERE id = ?
             """,
-            (severity, rationale, model, status, updated_at, case_id),
+            (
+                severity,
+                rationale,
+                model,
+                status,
+                updated_at,
+                model_requested,
+                route,
+                rule,
+                verdict,
+                recommended_action,
+                confidence,
+                None if privileged_account is None else int(privileged_account),
+                None if crown_jewel_asset is None else int(crown_jewel_asset),
+                prompt_tokens,
+                completion_tokens,
+                case_id,
+            ),
         )
         return self._must_case(conn, case_id)
+
+    def get_evidence_by_id(
+        self,
+        conn: sqlite3.Connection,
+        evidence_id: int,
+    ) -> Evidence | None:
+        row = conn.execute("SELECT * FROM evidence WHERE id = ?", (evidence_id,)).fetchone()
+        if row is None:
+            return None
+        return _evidence_from_row(row)
 
     def update_case_status(
         self,

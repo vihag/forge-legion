@@ -1,7 +1,11 @@
 version: 1
 privileged_account_patterns: ['^adm\.', '^da-', '^svc-admin']
+crown_jewel_hosts: [FIN-DB-01]
 rules:
   - {name: privileged_account_collaborative, when: {privileged_account: true}, route: collaborative}
+  - {name: splunk_high_or_critical_collaborative, when: {splunk_severity_in: [high, critical]}, route: collaborative}
+  - {name: crown_jewel_collaborative, when: {crown_jewel_asset: true}, route: collaborative}
+  - {name: non_benign_verdict_collaborative, when: {verdict_in: [suspicious, malicious]}, route: collaborative}
   - {name: high_or_critical_collaborative, when: {assessed_severity_in: [high, critical]}, route: collaborative}
   - {name: low_medium_autonomous, when: {assessed_severity_in: [low, medium]}, route: autonomous}
 default_route: review
