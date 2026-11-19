@@ -28,10 +28,28 @@ def load_config() -> AdapterConfig:
     )
 
 
+def _expand_host_entry(entry: str) -> list[str]:
+    if ":" in entry or entry.startswith("["):
+        return [entry]
+    return [entry, f"{entry}:*"]
+
+
 def load_allowed_hosts() -> list[str]:
     """Host patterns for MCP transport-security (DNS rebinding)."""
     defaults = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
     raw = os.environ.get("MCP_ALLOWED_HOSTS", "").strip()
-    if not raw:
-        return defaults
-    return [item.strip() for item in raw.split(",") if item.strip()]
+    extras: list[str] = []
+    if raw:
+        for item in raw.split(","):
+            stripped = item.strip()
+            if not stripped:
+                continue
+            extras.extend(_expand_host_entry(stripped))
+    seen: set[str] = set()
+    merged: list[str] = []
+    for host in [*defaults, *extras]:
+        if host in seen:
+            continue
+        seen.add(host)
+        merged.append(host)
+    return merged

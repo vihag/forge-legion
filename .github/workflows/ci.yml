@@ -54,3 +54,63 @@ jobs:
         run: pip install -e ".[dev]"
       - name: OpenAPI drift
         run: python scripts/export_openapi.py --check
+
+  boot-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Prepare env
+        run: |
+          cp .env.example .env.local
+          echo "GROK_CLIENT=fixture" >> .env.local
+      - name: Compose up and health
+        run: |
+          make up
+          make health
+      - name: Triage seed
+        run: |
+          make triage-seed | tee triage.json
+          python scripts/assert_seed_triaged.py triage.json
+      - name: Health fails when SOAR is down
+        run: |
+          docker compose --env-file .env.local -f deploy/compose.yml stop mock_soar
+          if HEALTH_TIMEOUT_S=5 make health; then
+            echo "expected health to fail when mock_soar is stopped" >&2
+            exit 1
+          fi
+          docker compose --env-file .env.local -f deploy/compose.yml start mock_soar
+          make health
+      - name: Reset stores
+        run: |
+          set -a && . ./.env.local && set +a
+          make reset
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          base = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8080").rstrip("/")
+          with urllib.request.urlopen(f"{base}/case/v1/cases") as resp:
+              cases = json.loads(resp.read())
+          assert cases.get("total") == 0, cases
+          with urllib.request.urlopen(f"{base}/soar/v1/submissions") as resp:
+              soar = json.loads(resp.read())
+          assert soar.get("items") == [], soar
+          PY
+      - name: Capture compose logs on failure
+        if: always()
+        run: docker compose --env-file .env.local -f deploy/compose.yml --profile ngrok --profile tools logs --no-color > compose.log || true
+      - name: Upload compose logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-log
+          path: compose.log
+      - name: Compose down
+        if: always()
+        run: make down

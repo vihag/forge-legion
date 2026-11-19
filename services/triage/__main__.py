@@ -6,9 +6,9 @@ import sys
 from typing import Never
 
 from services.triage.clients import AlertNotFound, CaseApiClient, SplunkClient
-from services.triage.config import ConfigError, load_settings, require_api_key
+from services.triage.config import ConfigError, TriageSettings, load_settings, require_api_key
 from services.triage.graph import TriageDeps, run_triage
-from services.triage.grok import HttpGrokClient
+from services.triage.grok import FixtureGrokClient, GrokClient, HttpGrokClient
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -22,20 +22,33 @@ def main(argv: list[str] | None = None) -> int:
     _never(args.command)
 
 
-def _run_alert(alert_id: str) -> int:
-    settings = load_settings()
+def _resolve_grok_client(settings: TriageSettings) -> GrokClient | tuple[int, str]:
+    if settings.grok_client == "fixture":
+        print("grok_client=fixture", file=sys.stderr)
+        if settings.grok_fixture_path is None:
+            return 2, "GROK_FIXTURE_PATH is not set"
+        return FixtureGrokClient(settings.grok_fixture_path, model_requested=settings.xai_model)
     try:
         api_key = require_api_key(settings)
     except ConfigError as exc:
-        print(str(exc), file=sys.stderr)
-        return 2
-    case_client = CaseApiClient(settings.case_api_url)
-    splunk_client = SplunkClient(settings.mock_splunk_url)
-    grok_client = HttpGrokClient(
+        return 2, str(exc)
+    return HttpGrokClient(
         api_key=api_key,
         model=settings.xai_model,
         base_url=settings.xai_base_url,
     )
+
+
+def _run_alert(alert_id: str) -> int:
+    settings = load_settings()
+    grok_or_error = _resolve_grok_client(settings)
+    if isinstance(grok_or_error, tuple):
+        code, message = grok_or_error
+        print(message, file=sys.stderr)
+        return code
+    grok_client = grok_or_error
+    case_client = CaseApiClient(settings.case_api_url)
+    splunk_client = SplunkClient(settings.mock_splunk_url)
     deps = TriageDeps(
         case_client=case_client,
         splunk_client=splunk_client,
