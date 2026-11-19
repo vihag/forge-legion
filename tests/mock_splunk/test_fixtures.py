@@ -11,6 +11,18 @@ from services.mock_splunk.errors import FixtureError
 from services.mock_splunk.sources import REGISTRY
 from services.mock_splunk.store import SplunkStore, default_fixtures_dir
 
+SEED_SOURCES = frozenset({"auth", "proxy", "edr"})
+SEED_EVIDENCE_IDS = [
+    "EV-AUTH-0001",
+    "EV-AUTH-0002",
+    "EV-AUTH-0003",
+    "EV-PROXY-0001",
+    "EV-PROXY-0002",
+    "EV-EDR-0001",
+    "EV-EDR-0002",
+    "EV-EDR-0003",
+]
+
 
 def test_all_fixtures_validate_against_models() -> None:
     store = SplunkStore()
@@ -18,12 +30,14 @@ def test_all_fixtures_validate_against_models() -> None:
     alerts = store.loaded_alerts()
     evidence = store.loaded_evidence()
     assert len(alerts) == 1
-    assert len(evidence) == 8
+    seed = [item for item in evidence if item.source in SEED_SOURCES]
+    assert len(seed) == 8
     counts: dict[str, int] = {}
     for item in evidence:
         spec = REGISTRY[item.source]
         spec.Record.model_validate(item.content)
-        counts[item.source] = counts.get(item.source, 0) + 1
+        if item.source in SEED_SOURCES:
+            counts[item.source] = counts.get(item.source, 0) + 1
     assert counts == {"auth": 3, "proxy": 2, "edr": 3}
     alert = alerts[0]
     assert alert.alert_id == "SPL-2026-0001"
@@ -34,17 +48,9 @@ def test_all_fixtures_validate_against_models() -> None:
 
 def test_evidence_ids_unique_and_prefixed_by_source() -> None:
     evidence = SplunkStore().loaded_evidence()
+    seed_ids = [item.evidence_id for item in evidence if item.source in SEED_SOURCES]
+    assert seed_ids == SEED_EVIDENCE_IDS
     ids = [item.evidence_id for item in evidence]
-    assert ids == [
-        "EV-AUTH-0001",
-        "EV-AUTH-0002",
-        "EV-AUTH-0003",
-        "EV-PROXY-0001",
-        "EV-PROXY-0002",
-        "EV-EDR-0001",
-        "EV-EDR-0002",
-        "EV-EDR-0003",
-    ]
     assert len(ids) == len(set(ids))
     for item in evidence:
         spec = REGISTRY[item.source]
@@ -61,11 +67,13 @@ def test_alert_ids_referenced_by_evidence_exist() -> None:
     linked = 0
     unlinked = 0
     for item in store.loaded_evidence():
-        if not item.alert_ids:
-            unlinked += 1
         for alert_id in item.alert_ids:
             assert alert_id in known
-            linked += 1
+        if item.source not in SEED_SOURCES:
+            continue
+        if not item.alert_ids:
+            unlinked += 1
+        linked += len(item.alert_ids)
     assert linked == 7
     assert unlinked == 1
     baseline = next(item for item in store.loaded_evidence() if item.evidence_id == "EV-AUTH-0001")

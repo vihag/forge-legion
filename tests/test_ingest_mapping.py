@@ -75,7 +75,11 @@ def test_seed_ingests_into_case_api_end_to_end(tmp_path: Path) -> None:
         case_id = case["id"]
 
         evidence_response = splunk_client.get(f"/v1/alerts/{ALERT_ID}/evidence")
-        items = evidence_response.json()["items"]
+        items = [
+            item
+            for item in evidence_response.json()["items"]
+            if item["source"] in {"auth", "proxy", "edr"}
+        ]
         assert len(items) == 7
         refs: list[str] = []
         for item in items:

@@ -9,6 +9,7 @@ from services.mock_splunk.app import create_app
 from .conftest import fixed_clock
 
 ALERT_ID = "SPL-2026-0001"
+SEED_SOURCES = frozenset({"auth", "proxy", "edr"})
 LINKED_EVIDENCE = [
     "EV-AUTH-0002",
     "EV-AUTH-0003",
@@ -25,12 +26,14 @@ AUTH_WINDOW = {
 }
 
 
-def _ids(body: dict[str, object]) -> list[str]:
+def _ids(body: dict[str, object], *, sources: frozenset[str] | None = None) -> list[str]:
     items = body["items"]
     assert isinstance(items, list)
     found: list[str] = []
     for item in items:
         assert isinstance(item, dict)
+        if sources is not None and item["source"] not in sources:
+            continue
         evidence_id = item["evidence_id"]
         assert isinstance(evidence_id, str)
         found.append(evidence_id)
@@ -94,7 +97,7 @@ def test_seed_alert_evidence_returns_7_sorted_by_time(client: TestClient) -> Non
     response = client.get(f"/v1/alerts/{ALERT_ID}/evidence")
     assert response.status_code == 200
     body = response.json()
-    assert _ids(body) == LINKED_EVIDENCE
+    assert _ids(body, sources=SEED_SOURCES) == LINKED_EVIDENCE
     items = body["items"]
     timestamps = [item["timestamp"] for item in items]
     assert timestamps == sorted(timestamps)
@@ -107,7 +110,10 @@ def test_evidence_by_alert_filtered_by_source(client: TestClient) -> None:
     assert _ids(edr.json()) == ["EV-EDR-0001", "EV-EDR-0002", "EV-EDR-0003"]
     auth = client.get(f"/v1/alerts/{ALERT_ID}/evidence", params={"source": "auth"})
     assert _ids(auth.json()) == ["EV-AUTH-0002", "EV-AUTH-0003"]
-    unknown = client.get(f"/v1/alerts/{ALERT_ID}/evidence", params={"source": "vpn"})
+    unknown = client.get(
+        f"/v1/alerts/{ALERT_ID}/evidence",
+        params={"source": "no_such_source"},
+    )
     assert unknown.status_code == 422
     assert unknown.json()["error"] == "unknown_source"
 
@@ -190,7 +196,7 @@ def test_window_unknown_source_returns_422(client: TestClient) -> None:
     response = client.get(
         "/v1/evidence",
         params={
-            "source": "vpn",
+            "source": "no_such_source",
             "start": "2026-11-17T00:00:00Z",
             "end": "2026-11-18T00:00:00Z",
         },
@@ -273,7 +279,11 @@ def test_reset_restores_seed_after_replay(client: TestClient) -> None:
     assert client.get(f"/v1/alerts/{ALERT_ID}-R1").status_code == 200
     response = client.post("/v1/reset", json={})
     assert response.status_code == 200
-    assert response.json() == {"seed_version": "c2-seed-1", "alerts": 1, "evidence": 8}
+    body = response.json()
+    assert body["seed_version"] == "c2-seed-1"
+    assert body["alerts"] == 1
+    sources = client.get("/v1/sources").json()["items"]
+    assert body["evidence"] == sum(item["record_count"] for item in sources)
     assert client.get(f"/v1/alerts/{ALERT_ID}-R1").status_code == 404
     listed = client.get("/v1/alerts").json()["items"]
     assert [item["alert_id"] for item in listed] == [ALERT_ID]
@@ -328,7 +338,7 @@ def test_replayed_alert_evidence_matches_root(client: TestClient) -> None:
     root = client.get(f"/v1/alerts/{ALERT_ID}/evidence").json()
     copy = client.get(f"/v1/alerts/{replayed['alert_id']}/evidence").json()
     assert copy == root
-    assert _ids(copy) == LINKED_EVIDENCE
+    assert _ids(copy, sources=SEED_SOURCES) == LINKED_EVIDENCE
 
 
 def test_replay_of_replay_resolves_to_root(client: TestClient) -> None:

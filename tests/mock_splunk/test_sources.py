@@ -70,7 +70,10 @@ def test_adding_source_needs_no_spec_change(
     fixtures = tmp_path / "fixtures"
     shutil.copytree(default_fixtures_dir(), fixtures)
 
-    class VpnRecord(BaseModel):
+    probe_name = "zz_spec_probe"
+    assert probe_name not in REGISTRY
+
+    class ProbeRecord(BaseModel):
         model_config = ConfigDict(extra="forbid")
 
         gateway: str
@@ -78,19 +81,19 @@ def test_adding_source_needs_no_spec_change(
         action: Literal["connect", "disconnect"]
         assigned_ip: str
 
-    vpn = SourceSpec(
-        name="vpn",
-        id_prefix="EV-VPN-",
-        Record=VpnRecord,
-        fixture="vpn.json",
+    probe = SourceSpec(
+        name=probe_name,
+        id_prefix="EV-PROBE-",
+        Record=ProbeRecord,
+        fixture="zz_spec_probe.json",
     )
-    (fixtures / "vpn.json").write_text(
+    (fixtures / "zz_spec_probe.json").write_text(
         json.dumps(
             {
-                "source": "vpn",
+                "source": probe_name,
                 "records": [
                     {
-                        "evidence_id": "EV-VPN-0001",
+                        "evidence_id": "EV-PROBE-0001",
                         "timestamp": "2026-11-18T02:04:30Z",
                         "alert_ids": ["SPL-2026-0001"],
                         "entities": {"user": "adm.mtan", "hosts": ["VPN-GW-01"]},
@@ -108,19 +111,19 @@ def test_adding_source_needs_no_spec_change(
     )
     monkeypatch.setattr(
         "services.mock_splunk.sources.REGISTRY",
-        {**REGISTRY, vpn.name: vpn},
+        {**REGISTRY, probe.name: probe},
     )
     extra = create_app(fixtures_dir=fixtures)
     assert json.dumps(extra.openapi(), indent=2) + "\n" == committed
     with TestClient(extra) as client:
         listed = client.get("/v1/sources").json()["items"]
-        assert [item["name"] for item in listed] == [*REGISTRY.keys(), "vpn"]
-        vpn_row = listed[-1]
-        assert vpn_row["id_prefix"] == "EV-VPN-"
-        assert vpn_row["record_count"] == 1
+        assert [item["name"] for item in listed] == [*REGISTRY.keys(), probe_name]
+        probe_row = listed[-1]
+        assert probe_row["id_prefix"] == "EV-PROBE-"
+        assert probe_row["record_count"] == 1
         evidence = client.get(
             "/v1/alerts/SPL-2026-0001/evidence",
-            params={"source": "vpn"},
+            params={"source": probe_name},
         )
         assert evidence.status_code == 200
-        assert [item["evidence_id"] for item in evidence.json()["items"]] == ["EV-VPN-0001"]
+        assert [item["evidence_id"] for item in evidence.json()["items"]] == ["EV-PROBE-0001"]
