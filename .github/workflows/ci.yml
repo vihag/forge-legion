@@ -217,6 +217,8 @@ jobs:
       - name: Reset stores
         run: |
           set -a && . ./.env.local && set +a
+          # Remove the worker so it cannot re-triage the seed after reset.
+          docker compose --env-file .env.local -f deploy/compose.yml up -d --scale triage_worker=0 triage_worker
           make reset
           python - <<'PY'
           import json

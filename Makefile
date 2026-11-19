@@ -61,6 +61,7 @@ down: _check_env
 
 reset: _check_env
 	@set -a && . ./$(ENV_FILE) && set +a; \
+	$(COMPOSE) stop triage_worker || true; \
 	{ \
 		echo 'Step 1: case store reset'; \
 		$(COMPOSE) exec -T case_api python -m services.case_api.reset && \
@@ -75,7 +76,7 @@ reset: _check_env
 		echo 'Step 3: mock splunk reset'; \
 		curl -sf -X POST "$$PUBLIC_BASE_URL/splunk/v1/reset" -H 'content-type: application/json' -d '{}'; \
 	} || { echo 'reset failed at step 3 (mock_splunk)' >&2; exit 1; }; \
-	$(COMPOSE) restart triage_worker || true; \
+	$(COMPOSE) start triage_worker || true; \
 	$(MAKE) health
 
 health: _check_env
