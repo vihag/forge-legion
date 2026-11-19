@@ -121,8 +121,11 @@ def build_graph(deps: TriageDeps) -> StateGraph[TriageState, None, TriageState, 
                 evidence_ids=set(state.get("evidence_map", {})),
             )
         except GrokCallError as exc:
+            reason: ReviewReason = (
+                "invalid_model_output" if exc.is_invalid_output else "model_call_failed"
+            )
             return {
-                "error_reason": "model_call_failed",
+                "error_reason": reason,
                 "error_detail": exc.detail or str(exc),
             }
         except Exception as exc:  # noqa: BLE001 - transport failures become review

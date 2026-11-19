@@ -75,7 +75,7 @@ CI uses recorded fixtures under `tests/triage/fixtures/` and blocks outbound net
 make lint
 make mypy
 make test
-make openapi -- --check
+python scripts/export_openapi.py --check
 ```
 
 `scripts/export_openapi.py` rewrites `contracts/openapi.json` and `contracts/mock_splunk.openapi.json` from the live apps. `--check` exits 1 when either committed file has drifted.

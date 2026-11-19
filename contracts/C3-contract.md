@@ -8,7 +8,7 @@ Stack: Python 3.11, `langgraph`, `httpx`, `pyyaml` and Pydantic v2. There is no 
 2. **Routing is policy, not model output.** The model's `recommended_route` is recorded but advisory. `config/routing.yaml` combined with the pure `routing.py` decides the route. Severity and confidence are separate inputs, and no confidence threshold ships enabled (brief §5.3 says thresholds need approval).
 3. **No guessed results.** A failed call or output that fails validation goes to `NEEDS_REVIEW` with the reason recorded. The severity stays untouched; nothing defaults to Splunk's label or to "medium".
 4. **Provenance goes in as evidence, so C1 needs no TriageCreate change.** The full validated assessment is attached as evidence with `source="triage_assessment"` and `ref=<response id>`. That evidence carries the model name the API *returned* (alongside the requested one), the response id, the `x-request-id` header if present, usage, MITRE ids, `triggered_at` and the route. `TriageCreate.model` is set to the **returned** model (e.g. `grok-4.3` even when `grok-3-mini` was requested).
-5. **Ingest is idempotent** (ARCHON's ruling). A 409 duplicate `alert_id` triggers a lookup by `alert_id` and a log line. If the case is past `NEW`, triage stops without re-triaging.
+5. **Ingest is idempotent** (ARCHON's ruling). A 409 duplicate `alert_id` triggers a lookup by `alert_id` and a log line. If the case is past `NEW` (including `NEEDS_REVIEW`, `TRIAGED`, and every later status), triage stops without re-triaging.
 
 ## 1. Required additive C1 changes (backward compatible: nothing removed or renamed)
 C1 has a store method `get_case_by_alert_id` but no API route for it, and no review state. This change adds exactly:

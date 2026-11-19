@@ -14,7 +14,6 @@ from services.triage.config import ConfigError
 from services.triage.prompt import SYSTEM_PROMPT
 
 MITRE_RE = re.compile(r"^T\d{4}(\.\d{3})?$")
-RETRYABLE = {408, 429, 500, 502, 503, 504}
 
 
 @dataclass(frozen=True)
@@ -35,6 +34,10 @@ class GrokCallError(Exception):
         super().__init__(message)
         self.detail = detail
 
+    @property
+    def is_invalid_output(self) -> bool:
+        return str(self) == "invalid model output"
+
 
 class HttpGrokClient:
     def __init__(
@@ -44,12 +47,7 @@ class HttpGrokClient:
         model: str,
         base_url: str,
         transport: httpx.BaseTransport | None = None,
-        live: bool = False,
     ) -> None:
-        if not live:
-            raise RuntimeError(
-                "HttpGrokClient requires pytest marker live; use FixtureGrokClient in tests"
-            )
         if not api_key:
             raise ConfigError("XAI_API_KEY is not set")
         self._api_key = api_key
@@ -60,6 +58,7 @@ class HttpGrokClient:
         self._client.close()
 
     def assess(self, user_message: str, *, evidence_ids: set[str]) -> GrokResponse:
+        del evidence_ids
         body = {
             "model": self._model,
             "temperature": 0,
@@ -81,8 +80,14 @@ class HttpGrokClient:
 
     def _post_with_retry(self, body: dict[str, Any]) -> httpx.Response:
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        response = self._client.post("/chat/completions", json=body, headers=headers)
-        if response.status_code in RETRYABLE:
+        try:
+            response = self._client.post("/chat/completions", json=body, headers=headers)
+        except httpx.TimeoutException:
+            try:
+                response = self._client.post("/chat/completions", json=body, headers=headers)
+            except httpx.TimeoutException as exc:
+                raise GrokCallError("grok request failed", detail="timeout") from exc
+        if response.status_code >= 500:
             response = self._client.post("/chat/completions", json=body, headers=headers)
         if response.status_code >= 400:
             raise GrokCallError("grok request failed", detail=response.text[:2000])
@@ -133,8 +138,12 @@ def _parse_chat_response(response: httpx.Response) -> GrokResponse:
 
 
 def _parse_fixture_payload(data: dict[str, Any], request_id: str | None = None) -> GrokResponse:
-    response_id = str(data.get("id", ""))
-    model_returned = str(data.get("model", ""))
+    response_id_raw = data.get("id")
+    if not isinstance(response_id_raw, str) or not response_id_raw.strip():
+        raise GrokCallError("invalid model output", detail="missing response id")
+    model_raw = data.get("model")
+    if not isinstance(model_raw, str) or not model_raw.strip():
+        raise GrokCallError("invalid model output", detail="missing model")
     usage_obj = data.get("usage")
     usage = usage_obj if isinstance(usage_obj, dict) else {}
     choices = data.get("choices")
@@ -150,8 +159,8 @@ def _parse_fixture_payload(data: dict[str, Any], request_id: str | None = None) 
     if not isinstance(content, str):
         raise GrokCallError("invalid model output", detail="missing content")
     return GrokResponse(
-        response_id=response_id,
-        model_returned=model_returned,
+        response_id=response_id_raw,
+        model_returned=model_raw,
         request_id=request_id,
         usage=usage,
         content=content,

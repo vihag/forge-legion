@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import socket
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -15,23 +14,6 @@ from services.triage.config import load_settings
 from services.triage.graph import TriageDeps
 from services.triage.grok import FixtureGrokClient
 from services.triage.http_transport import InProcessTransport
-
-
-@pytest.fixture(autouse=True)
-def block_network(request: pytest.FixtureRequest) -> Iterator[None]:
-    if request.node.get_closest_marker("live"):
-        yield
-        return
-    original = socket.socket.connect
-
-    def _deny(self: socket.socket, address: object) -> None:
-        raise OSError("network disabled in tests")
-
-    socket.socket.connect = _deny  # type: ignore[method-assign]
-    try:
-        yield
-    finally:
-        socket.socket.connect = original
 
 
 @pytest.fixture

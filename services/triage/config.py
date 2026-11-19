@@ -1,7 +1,7 @@
 """Environment-backed configuration for the triage CLI and smoke script."""
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from services.triage.routing import DEFAULT_ROUTING_PATH, RoutingConfig, load_routing
@@ -13,7 +13,7 @@ class ConfigError(Exception):
 
 @dataclass(frozen=True)
 class TriageSettings:
-    xai_api_key: str | None
+    xai_api_key: str | None = field(repr=False)
     xai_model: str
     xai_base_url: str
     case_api_url: str

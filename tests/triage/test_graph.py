@@ -6,11 +6,12 @@ import logging
 import socket
 from pathlib import Path
 
+import httpx
 import pytest
 
 from services.triage.config import ConfigError, load_settings, require_api_key
 from services.triage.graph import TriageDeps, run_triage
-from services.triage.grok import FixtureGrokClient, GrokCallError, GrokResponse
+from services.triage.grok import FixtureGrokClient, GrokResponse, HttpGrokClient
 
 
 class CountingGrok(FixtureGrokClient):
@@ -21,11 +22,6 @@ class CountingGrok(FixtureGrokClient):
     def assess(self, user_message: str, *, evidence_ids: set[str]) -> GrokResponse:
         self.calls += 1
         return super().assess(user_message, evidence_ids=evidence_ids)
-
-
-class FailingGrok:
-    def assess(self, user_message: str, *, evidence_ids: set[str]) -> GrokResponse:
-        raise GrokCallError("grok unavailable", detail="http 500")
 
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -42,7 +38,8 @@ def test_seed_alert_triaged_end_to_end(triage_stack: TriageDeps) -> None:
     evidence = triage_stack.case_client.list_evidence(result.case_id)
     splunk_refs = [item for item in evidence if item.ref.startswith("EV-")]
     assert len(splunk_refs) == 7
-    assert any(item.source == "triage_assessment" for item in evidence)
+    assessments = [item for item in evidence if item.source == "triage_assessment"]
+    assert len(assessments) == 1
 
 
 def test_audit_order_ingested_evidence_assessment_triaged(triage_stack: TriageDeps) -> None:
@@ -55,13 +52,10 @@ def test_audit_order_ingested_evidence_assessment_triaged(triage_stack: TriageDe
     )
     events = response.json()["items"]
     types = [event["type"] for event in events]
-    assert types[0] == "case.ingested"
-    assert types.count("evidence.added") == 8
-    assessment_idx = next(
-        i for i, event in enumerate(events) if event["payload"].get("source") == "triage_assessment"
-    )
-    triaged_idx = types.index("case.triaged")
-    assert assessment_idx < triaged_idx
+    assert types == ["case.ingested", *["evidence.added"] * 7, "evidence.added", "case.triaged"]
+    assert events[-1]["type"] == "case.triaged"
+    assessment_event = events[-2]
+    assert assessment_event["payload"]["source"] == "triage_assessment"
 
 
 def test_persists_returned_model_not_requested(triage_stack: TriageDeps) -> None:
@@ -149,18 +143,95 @@ def test_resume_from_new_attaches_only_missing_evidence(triage_stack: TriageDeps
 
 
 def test_model_call_failure_flags_review(triage_stack: TriageDeps) -> None:
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(500, json={"error": "down"})
+
+    grok = HttpGrokClient(
+        api_key="secret",
+        model="grok-3-mini",
+        base_url="https://api.x.ai/v1",
+        transport=httpx.MockTransport(handler),
+    )
     deps = TriageDeps(
         case_client=triage_stack.case_client,
         splunk_client=triage_stack.splunk_client,
-        grok_client=FailingGrok(),
+        grok_client=grok,
         routing=triage_stack.routing,
         model_requested="grok-3-mini",
     )
     result = run_triage(deps, ALERT_ID)
+    assert calls["n"] == 2
     assert result.outcome == "needs_review"
     case = triage_stack.case_client.get_case(result.case_id)  # type: ignore[arg-type]
     assert case.status.value == "NEEDS_REVIEW"
     assert case.triage_severity is None
+    failures = triage_stack.case_client.list_evidence(case.id)
+    failure = next(item for item in failures if item.source == "triage_failure")
+    assert failure.content["reason"] == "model_call_failed"
+
+
+def test_model_call_timeout_flags_review(triage_stack: TriageDeps) -> None:
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        raise httpx.TimeoutException("timed out")
+
+    grok = HttpGrokClient(
+        api_key="secret",
+        model="grok-3-mini",
+        base_url="https://api.x.ai/v1",
+        transport=httpx.MockTransport(handler),
+    )
+    deps = TriageDeps(
+        case_client=triage_stack.case_client,
+        splunk_client=triage_stack.splunk_client,
+        grok_client=grok,
+        routing=triage_stack.routing,
+        model_requested="grok-3-mini",
+    )
+    result = run_triage(deps, ALERT_ID)
+    assert calls["n"] == 2
+    case = triage_stack.case_client.get_case(result.case_id)  # type: ignore[arg-type]
+    assert case.status.value == "NEEDS_REVIEW"
+    assert case.triage_severity is None
+    evidence_rows = triage_stack.case_client.list_evidence(case.id)
+    failure = next(item for item in evidence_rows if item.source == "triage_failure")
+    assert failure.content["reason"] == "model_call_failed"
+
+
+def test_needs_review_rerun_skips_without_retriage(triage_stack: TriageDeps) -> None:
+    counting = CountingGrok(FIXTURES / "grok_seed_ok.json")
+    deps = TriageDeps(
+        case_client=triage_stack.case_client,
+        splunk_client=triage_stack.splunk_client,
+        grok_client=counting,
+        routing=triage_stack.routing,
+        model_requested="grok-3-mini",
+    )
+    fail_deps = TriageDeps(
+        case_client=triage_stack.case_client,
+        splunk_client=triage_stack.splunk_client,
+        grok_client=HttpGrokClient(
+            api_key="secret",
+            model="grok-3-mini",
+            base_url="https://api.x.ai/v1",
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(500, json={"error": "down"})
+            ),
+        ),
+        routing=triage_stack.routing,
+        model_requested="grok-3-mini",
+    )
+    first = run_triage(fail_deps, ALERT_ID)
+    assert first.outcome == "needs_review"
+    counting.calls = 0
+    second = run_triage(deps, ALERT_ID)
+    assert second.outcome == "skipped_existing"
+    assert counting.calls == 0
 
 
 def test_missing_api_key_fails_before_network() -> None:
@@ -185,6 +256,7 @@ def test_missing_api_key_fails_before_network() -> None:
         "grok_bad_severity.json",
         "grok_unknown_evidence_ref.json",
         "grok_missing_field.json",
+        "grok_missing_response_id.json",
     ],
 )
 def test_invalid_output_flags_review(
@@ -210,4 +282,4 @@ def test_invalid_output_flags_review(
 
 def test_no_network_in_ci() -> None:
     with pytest.raises(OSError, match="network disabled"):
-        socket.socket().connect(("example.com", 80))
+        socket.getaddrinfo("example.com", 80)

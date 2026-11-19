@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from contracts.mock_splunk import format_utc
 from services.case_api.app import create_app as create_case_app
 from services.mock_splunk.app import create_app as create_splunk_app
 from services.triage.clients import CaseApiClient, SplunkClient
@@ -47,7 +48,6 @@ def main(argv: list[str] | None = None) -> int:
             api_key=api_key,
             model=settings.xai_model,
             base_url=settings.xai_base_url,
-            live=True,
         )
         deps = TriageDeps(
             case_client=case_client,
@@ -87,7 +87,7 @@ def _record_grok(grok_client: HttpGrokClient, splunk_client: SplunkClient) -> No
         {
             "evidence_id": item.evidence_id,
             "source": item.source,
-            "timestamp": item.timestamp.isoformat(),
+            "timestamp": format_utc(item.timestamp),
             "content": item.content,
         }
         for item in evidence

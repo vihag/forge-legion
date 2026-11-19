@@ -35,7 +35,6 @@ def _run_alert(alert_id: str) -> int:
         api_key=api_key,
         model=settings.xai_model,
         base_url=settings.xai_base_url,
-        live=True,
     )
     deps = TriageDeps(
         case_client=case_client,
