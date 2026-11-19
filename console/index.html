@@ -3,93 +3,145 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FORGE SOC Command Center</title>
+    <title>LEGION Command Center</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <header class="top-bar">
-      <h1>FORGE Command Center</h1>
-      <div class="badges">
-        <span class="badge shift">LIVE SHIFT</span>
-        <span id="auto-off-banner" class="banner hidden">AUTO-RESOLVE OFF</span>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <h1>LEGION Command Center</h1>
+          <p class="subtitle">Every Splunk alert, triaged by Grok and investigated by LEGION, with the analyst in control</p>
+        </div>
+      </div>
+      <div class="status-area">
+        <span id="auto-off-banner" class="banner hidden">Auto-close is off</span>
+        <span class="live" id="live-indicator"><span class="live-dot" aria-hidden="true"></span><span id="last-updated">Connecting…</span></span>
       </div>
     </header>
     <main>
       <section class="kpi-grid" aria-label="Key metrics">
-        <article class="tile" id="tile-total">
+        <article class="card kpi" id="tile-total">
           <h2>Total cases</h2>
           <p class="value" data-field="counts.total">—</p>
+          <p class="explain">Every alert Splunk raised that became a case.</p>
         </article>
-        <article class="tile" id="tile-auto">
-          <h2>Auto-resolved</h2>
+        <article class="card kpi positive" id="tile-auto">
+          <h2>Auto-closed</h2>
           <p class="value" data-field="counts.auto_resolved">—</p>
+          <p class="explain">Clear noise closed by the auto-close policy, no analyst time spent.</p>
         </article>
-        <article class="tile" id="tile-collab">
-          <h2>Collaborative open</h2>
-          <p class="value" data-field="counts.collaborative_open">—</p>
-        </article>
-        <article class="tile" id="tile-legion">
-          <h2>With LEGION open</h2>
+        <article class="card kpi accent" id="tile-legion">
+          <h2>With LEGION (open)</h2>
           <p class="value" data-field="counts.with_legion_open">—</p>
+          <p class="explain">Cases handed to the SOC agents, waiting to be investigated.</p>
         </article>
-        <article class="tile" id="tile-review">
+        <article class="card kpi accent" id="tile-collab">
+          <h2>Collaborative track</h2>
+          <p class="value" data-field="counts.collaborative_open">—</p>
+          <p class="explain">Of those, cases Grok routed straight to the collaborative track.</p>
+        </article>
+        <article class="card kpi risk" id="tile-review">
           <h2>Needs review</h2>
           <p class="value" data-field="counts.needs_review">—</p>
+          <p class="explain">Cases flagged for an analyst to look at directly.</p>
         </article>
-        <article class="tile" id="tile-uplift">
-          <h2>Uplifts</h2>
-          <p class="value" id="uplift-summary">—</p>
-        </article>
-        <article class="tile" id="tile-minutes">
-          <h2>Minutes saved (est.)</h2>
+        <article class="card kpi positive" id="tile-minutes">
+          <h2>Analyst minutes saved</h2>
           <p class="value" data-field="minutes_saved_estimate">—</p>
-          <p class="hint" id="minutes-hint">
-            Assumes <span data-field="assumptions.minutes_per_alert">15</span> min saved per
-            auto-resolved alert
+          <p class="explain" id="minutes-hint">
+            Estimate: <span data-field="assumptions.minutes_per_alert">15</span> minutes per
+            auto-closed alert.
           </p>
         </article>
       </section>
-      <section class="timing" aria-label="Timing statistics">
-        <h2>Timing (seconds)</h2>
-        <dl>
-          <div>
-            <dt>Time to triage</dt>
-            <dd id="time-triage">—</dd>
+
+      <section class="insight-grid" aria-label="Severity changes and timing">
+        <article class="card severity-box" id="tile-uplift">
+          <div class="box-head">
+            <h2>Uplifts</h2>
+            <span class="big-count risk-text" id="uplift-total">—</span>
           </div>
-          <div>
-            <dt>Time to resolve (AI only)</dt>
-            <dd id="time-ai-only">—</dd>
+          <p class="explain">Alerts Splunk under-rated that Grok raised.</p>
+          <ul class="transitions" id="uplift-list"></ul>
+        </article>
+        <article class="card severity-box" id="tile-downgrade">
+          <div class="box-head">
+            <h2>Downgrades</h2>
+            <span class="big-count positive-text" id="downgrade-total">—</span>
           </div>
-          <div>
-            <dt>Time to resolve (AI + human)</dt>
-            <dd id="time-ai-human">—</dd>
-          </div>
-        </dl>
+          <p class="explain">Alerts Splunk over-rated that Grok lowered.</p>
+          <ul class="transitions" id="downgrade-list"></ul>
+          <p class="fineprint" id="downgrade-note"></p>
+        </article>
+        <article class="card timing" id="timing-triage">
+          <h2>Time to triage</h2>
+          <p class="value" data-timing="value">—</p>
+          <p class="explain">How long from an alert firing in Splunk to Grok's assessment.</p>
+          <p class="fineprint" data-timing="note">no cases yet</p>
+        </article>
+        <article class="card timing" id="timing-ai-only">
+          <h2>Time to close, no human</h2>
+          <p class="value" data-timing="value">—</p>
+          <p class="explain">From alert to automatic closure under the auto-close policy, for clear noise.</p>
+          <p class="fineprint" data-timing="note">no cases yet</p>
+        </article>
+        <article class="card timing" id="timing-ai-human">
+          <h2>Time to close, with analyst</h2>
+          <p class="value" data-timing="value">—</p>
+          <p class="explain">From alert to the analyst approving LEGION's recommended action.</p>
+          <p class="fineprint" data-timing="note">no cases yet</p>
+        </article>
       </section>
+
       <section class="panels">
-        <article>
-          <h2>Live feed</h2>
-          <table id="recent-table">
+        <article class="card panel">
+          <div class="panel-head">
+            <h2>Live feed</h2>
+            <p class="explain">Most recent cases, newest first. Severity shows Splunk's rating, then Grok's when it changed.</p>
+          </div>
+          <table id="recent-table" class="data-table">
             <thead>
               <tr>
-                <th>ID</th>
+                <th>Case</th>
                 <th>Alert</th>
+                <th>Severity</th>
+                <th>Track</th>
                 <th>Status</th>
-                <th>Route</th>
                 <th>Verdict</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
         </article>
-        <article>
-          <h2>Active agents (15 min)</h2>
-          <ul id="agents-list"></ul>
+        <article class="card panel">
+          <div class="panel-head">
+            <h2>Active agents</h2>
+            <p class="explain">Who did work in the last 15 minutes.</p>
+          </div>
+          <table id="agents-table" class="data-table">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Type</th>
+                <th class="num">Events (last 15 min)</th>
+                <th>Last active</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <p class="empty hidden" id="agents-empty">No agent activity in the last 15 minutes.</p>
+          <ul class="legend" aria-label="Agent type colours">
+            <li><span class="dot type-system"></span>System</li>
+            <li><span class="dot type-agent"></span>AI bot</li>
+            <li><span class="dot type-analyst"></span>Human</li>
+          </ul>
         </article>
       </section>
     </main>
     <footer>
-      <p>Polling <code>/case/v1/metrics</code> every 5s</p>
+      <p>Refreshes every 5 seconds</p>
     </footer>
     <script src="app.js"></script>
   </body>
