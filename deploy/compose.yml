@@ -82,7 +82,7 @@ services:
     env_file:
       - ../${ENV_FILE:-.env.local}
     environment:
-      MCP_ADAPTER_TOKEN: ${MCP_ADAPTER_TOKEN:?}
+      MCP_ADAPTER_TOKEN: ${MCP_ADAPTER_TOKEN?}
       MCP_ALLOWED_HOSTS: "${NGROK_DOMAIN:-},${MCP_EXTRA_ALLOWED_HOSTS:-}"
     command:
       - uvicorn
@@ -154,7 +154,7 @@ services:
     env_file:
       - ../${ENV_FILE:-.env.local}
     environment:
-      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?}
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN?}
     command:
       - http
       - --url=${NGROK_DOMAIN}

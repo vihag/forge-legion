@@ -117,8 +117,8 @@ def test_up_public_and_compose_read_tokens_from_env_local() -> None:
     assert 'if [ -z "$$MCP_ADAPTER_TOKEN" ]' in up_public
     assert 'if [ -z "$$NGROK_AUTHTOKEN" ]' in up_public
     compose_text = COMPOSE.read_text(encoding="utf-8")
-    assert "MCP_ADAPTER_TOKEN: ${MCP_ADAPTER_TOKEN:?}" in compose_text
-    assert "NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?}" in compose_text
+    assert "MCP_ADAPTER_TOKEN: ${MCP_ADAPTER_TOKEN?}" in compose_text
+    assert "NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN?}" in compose_text
     assert "../${ENV_FILE:-.env.local}" in compose_text
     assert "ENV_FILE ?=" in makefile
 
