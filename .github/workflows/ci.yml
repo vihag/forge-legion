@@ -90,7 +90,7 @@ jobs:
       - name: Public gateway exposes MCP only
         run: |
           set -a && . ./.env.local && set +a
-          python - <<'PY'
+          docker compose --env-file .env.local -f deploy/compose.yml exec -T case_api python - <<'PY'
           import json
           import os
           import urllib.error
@@ -98,8 +98,6 @@ jobs:
 
           public_port = os.environ.get("PUBLIC_GATEWAY_PORT", "8081")
           local_port = os.environ.get("GATEWAY_PORT", "8080")
-          token = os.environ.get("MCP_ADAPTER_TOKEN", "")
-
           def fetch(url: str, *, headers: dict[str, str] | None = None) -> int:
               req = urllib.request.Request(url, headers=headers or {})
               try:
