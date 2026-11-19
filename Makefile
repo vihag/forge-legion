@@ -65,7 +65,7 @@ health: _check_env
 	@set -a && . ./.env.local && set +a && $(PYTHON) scripts/health.py
 
 triage-seed: _check_env
-	$(COMPOSE) --profile tools run --rm triage
+	$(COMPOSE) --profile tools run --rm -T --no-log-prefix triage
 
 compose-config:
 	$(COMPOSE) config -q
