@@ -5,23 +5,31 @@ Usage:
     python scripts/export_openapi.py --check
 """
 
+import asyncio
 import difflib
 import json
 import sys
 from pathlib import Path
-from typing import Literal, Never
+from typing import Any, Literal, Never
 
 from services.case_api.app import create_app as create_case_app
 from services.case_api.store import Store
+from services.mcp_adapter.config import AdapterConfig
+from services.mcp_adapter.server import build_mcp_server
+from services.mock_soar.app import create_app as create_soar_app
+from services.mock_soar.store import SoarStore
 from services.mock_splunk.app import create_app as create_splunk_app
 
 ROOT = Path(__file__).resolve().parents[1]
-SpecName = Literal["case_api", "mock_splunk"]
+SpecName = Literal["case_api", "mock_splunk", "mock_soar"]
 
 SPECS: dict[str, str] = {
     "case_api": "contracts/openapi.json",
     "mock_splunk": "contracts/mock_splunk.openapi.json",
+    "mock_soar": "contracts/mock_soar.openapi.json",
 }
+
+MCP_TOOLS_PATH = "contracts/mcp_tools.json"
 
 
 def _case_api_openapi() -> str:
@@ -40,6 +48,43 @@ def _mock_splunk_openapi() -> str:
     return json.dumps(app.openapi(), indent=2) + "\n"
 
 
+def _mock_soar_openapi() -> str:
+    app = create_soar_app(db_path=":memory:")
+    try:
+        spec = app.openapi()
+    finally:
+        store: object = getattr(app.state, "store", None)
+        if isinstance(store, SoarStore):
+            store.close()
+    return json.dumps(spec, indent=2) + "\n"
+
+
+async def _mcp_tools_payload() -> list[dict[str, Any]]:
+    config = AdapterConfig(
+        case_api_url="http://127.0.0.1:8000",
+        adapter_token=None,
+        actor_allowlist=None,
+    )
+    mcp = build_mcp_server(config)
+    tools = await mcp.list_tools()
+    items: list[dict[str, Any]] = []
+    for tool in tools:
+        items.append(
+            {
+                "name": tool.name,
+                "description": tool.description or "",
+                "inputSchema": tool.inputSchema,
+            }
+        )
+    items.sort(key=lambda item: str(item["name"]))
+    return items
+
+
+def _mcp_tools_json() -> str:
+    payload = asyncio.run(_mcp_tools_payload())
+    return json.dumps(payload, indent=2) + "\n"
+
+
 def canonical_openapi(spec_name: str) -> str:
     name = _as_spec_name(spec_name)
     match name:
@@ -47,18 +92,24 @@ def canonical_openapi(spec_name: str) -> str:
             return _case_api_openapi()
         case "mock_splunk":
             return _mock_splunk_openapi()
+        case "mock_soar":
+            return _mock_soar_openapi()
         case _ as unreachable:
             never_name: Never = unreachable
             raise RuntimeError(f"unhandled spec {never_name}")
 
 
+def canonical_mcp_tools() -> str:
+    return _mcp_tools_json()
+
+
 def _as_spec_name(value: str) -> SpecName:
-    if value == "case_api" or value == "mock_splunk":
-        return value
+    if value in ("case_api", "mock_splunk", "mock_soar"):
+        return value  # type: ignore[return-value]
     raise ValueError(f"unknown spec {value}")
 
 
-def _check(relative: str, live: str) -> bool:
+def _check(relative: str, live: str, *, label: str) -> bool:
     path = ROOT / relative
     if not path.is_file():
         print(f"{relative} is missing", file=sys.stderr)
@@ -66,7 +117,7 @@ def _check(relative: str, live: str) -> bool:
     committed = path.read_text(encoding="utf-8")
     if committed == live:
         return True
-    print(f"OpenAPI drift: {relative} does not match the live app", file=sys.stderr)
+    print(f"{label}: {relative} does not match the live app", file=sys.stderr)
     diff = "".join(
         difflib.unified_diff(
             committed.splitlines(keepends=True),
@@ -82,16 +133,21 @@ def _check(relative: str, live: str) -> bool:
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     generated = {name: canonical_openapi(name) for name in SPECS}
+    tools = canonical_mcp_tools()
     if "--check" in args:
         ok = True
         for name, relative in SPECS.items():
-            ok = _check(relative, generated[name]) and ok
+            ok = _check(relative, generated[name], label="OpenAPI drift") and ok
+        ok = _check(MCP_TOOLS_PATH, tools, label="MCP tools drift") and ok
         return 0 if ok else 1
     for name, relative in SPECS.items():
         path = ROOT / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(generated[name], encoding="utf-8")
         print(f"wrote {path}")
+    tools_path = ROOT / MCP_TOOLS_PATH
+    tools_path.write_text(tools, encoding="utf-8")
+    print(f"wrote {tools_path}")
     return 0
 
 

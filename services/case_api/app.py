@@ -8,7 +8,7 @@ from fastapi import FastAPI
 
 from services.case_api.routes import register_routes
 from services.case_api.service import CaseService
-from services.case_api.soar import FakeSoarClient, SoarClient
+from services.case_api.soar import FakeSoarClient, HttpSoarClient, SoarClient
 from services.case_api.store import Store
 
 
@@ -20,6 +20,14 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
         store.close()
 
 
+def _resolve_soar_client() -> SoarClient:
+    kind = os.environ.get("SOAR_CLIENT", "fake").lower()
+    if kind == "http":
+        url = os.environ.get("MOCK_SOAR_URL", "http://127.0.0.1:8002")
+        return HttpSoarClient(url)
+    return FakeSoarClient()
+
+
 def create_app(
     db_path: str | None = None,
     soar_client: SoarClient | None = None,
@@ -27,7 +35,7 @@ def create_app(
     """Build the case API. `db_path` defaults to CASE_DB_PATH or ./data/cases.db."""
     resolved = db_path if db_path is not None else os.environ.get("CASE_DB_PATH", "./data/cases.db")
     store = Store(resolved)
-    soar = soar_client if soar_client is not None else FakeSoarClient()
+    soar = soar_client if soar_client is not None else _resolve_soar_client()
     service = CaseService(store, soar)
     app = FastAPI(
         title="FORGE Case API",

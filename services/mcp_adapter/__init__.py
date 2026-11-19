@@ -1,0 +1,1 @@
+"""MCP adapter: one tool per Case API HTTP call."""

@@ -1,0 +1,244 @@
+[
+  {
+    "name": "add_evidence",
+    "description": "Add evidence to a case.",
+    "inputSchema": {
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "integer"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "ref": {
+          "title": "Ref",
+          "type": "string"
+        },
+        "content": {
+          "additionalProperties": true,
+          "title": "Content",
+          "type": "object"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "source",
+        "ref",
+        "content",
+        "actor_id"
+      ],
+      "title": "add_evidenceArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_case",
+    "description": "Fetch the full case view.",
+    "inputSchema": {
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "case_id"
+      ],
+      "title": "get_caseArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_case_history",
+    "description": "Return audit history for a case.",
+    "inputSchema": {
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "case_id"
+      ],
+      "title": "get_case_historyArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_cases",
+    "description": "List cases with optional filters.",
+    "inputSchema": {
+      "properties": {
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        },
+        "alert_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alert Id"
+        },
+        "limit": {
+          "default": 50,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "title": "Offset",
+          "type": "integer"
+        }
+      },
+      "title": "list_casesArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "propose_disposition",
+    "description": "Propose a disposition for analyst approval.",
+    "inputSchema": {
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "integer"
+        },
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        },
+        "finding_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Finding Ids",
+          "type": "array"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "action",
+        "rationale",
+        "finding_ids",
+        "actor_id"
+      ],
+      "title": "propose_dispositionArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "record_finding",
+    "description": "Record a finding on a case.",
+    "inputSchema": {
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "integer"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "statement": {
+          "title": "Statement",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        }
+      },
+      "required": [
+        "case_id",
+        "kind",
+        "statement",
+        "evidence_ids",
+        "actor_id"
+      ],
+      "title": "record_findingArguments",
+      "type": "object"
+    }
+  },
+  {
+    "name": "request_soar_action",
+    "description": "Submit an approved case to SOAR.",
+    "inputSchema": {
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "integer"
+        },
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "actor_id"
+      ],
+      "title": "request_soar_actionArguments",
+      "type": "object"
+    }
+  }
+]
