@@ -12,6 +12,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from contracts.mock_splunk import Alert, Entities, SplunkEvidence
 from contracts.scenarios import Scenario
 from services.mock_splunk.scenarios import (
@@ -168,8 +170,56 @@ def hitl_total(scenarios: tuple[Scenario, ...]) -> int:
     return len(_hitl_scenarios(scenarios))
 
 
-def plan_script(scenarios: tuple[Scenario, ...], seed: int) -> list[tuple[int, str, int]]:
+def default_script_path(scenario_dir: Path | None = None) -> Path:
+    """``demo_script.yaml`` next to the scenario dir; ``SCENARIO_SCRIPT`` overrides."""
+    override = os.environ.get("SCENARIO_SCRIPT")
+    if override:
+        return Path(override)
+    directory = scenario_dir if scenario_dir is not None else _scenario_paths()[1]
+    return directory.parent / "demo_script.yaml"
+
+
+def _script_file_plan(
+    scenarios: tuple[Scenario, ...],
+    path: Path,
+) -> list[tuple[int, str, int]] | None:
+    if not path.is_file():
+        return None
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    events = raw.get("events") or []
+    known = {scenario.id for scenario in scenarios}
+    missing = sorted({str(event["scenario"]) for event in events} - known)
+    if missing:
+        raise ValueError(f"{path.name}: unknown scenarios {missing}")
+    occurrences: dict[str, int] = {}
+    entries: list[tuple[int, str, int]] = []
+    for event in sorted(events, key=lambda item: int(item["at_s"])):
+        offset_s = int(event["at_s"])
+        if offset_s < 0:
+            raise ValueError(f"{path.name}: at_s must be >= 0")
+        scenario_id = str(event["scenario"])
+        occurrence = occurrences.get(scenario_id, 0)
+        occurrences[scenario_id] = occurrence + 1
+        entries.append((offset_s, scenario_id, occurrence))
+    entries.sort(key=lambda item: (item[0], item[1], item[2]))
+    return entries
+
+
+def plan_script(
+    scenarios: tuple[Scenario, ...],
+    seed: int,
+    *,
+    script_path: Path | None = None,
+) -> list[tuple[int, str, int]]:
+    """Single script planner: ``(offset_s, scenario_id, occurrence)`` sorted by offset.
+
+    ``demo_script.yaml`` (events ``at_s`` + ``scenario``) is the source of truth when present;
+    otherwise per-scenario ``demo_offset_s`` / ``demo_slot`` (slot n -> n*60 s) are used.
+    """
     del seed
+    scripted = _script_file_plan(scenarios, script_path or default_script_path())
+    if scripted is not None:
+        return scripted
     entries: list[tuple[int, str, int]] = []
     for scenario in scenarios:
         offsets = scenario.script_offsets
@@ -324,16 +374,6 @@ def generate(
 
 
 def script_schedule(scenarios: tuple[Scenario, ...]) -> list[Scenario]:
-    plan = plan_script(scenarios, seed=0)
+    """Scenarios in script firing order (repeats kept), derived from ``plan_script``."""
     by_id = {scenario.id: scenario for scenario in scenarios}
-    ordered: list[Scenario] = []
-    seen: set[str] = set()
-    for _offset, scenario_id, _occ in plan:
-        if scenario_id in seen:
-            continue
-        scenario = by_id.get(scenario_id)
-        if scenario is None:
-            continue
-        ordered.append(scenario)
-        seen.add(scenario_id)
-    return ordered
+    return [by_id[scenario_id] for _offset, scenario_id, _occ in plan_script(scenarios, seed=0)]

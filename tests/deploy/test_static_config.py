@@ -49,11 +49,13 @@ IP_LITERAL = re.compile(
 
 def _strip_interpolation(text: str) -> str:
     text = re.sub(r"https?://\$\{[A-Za-z0-9_]+(?::-[^}]*)?\}", "", text)
+    # nginx runtime variables set from env (e.g. ``http://$mcp_upstream``)
+    text = re.sub(r"https?://\$[a-z_]+_upstream\b", "", text)
     return VAR_PATTERN.sub("", text)
 
 
 def test_no_literal_urls_or_hosts_in_compose_or_nginx() -> None:
-    allowed_ips = {"0.0.0.0", "127.0.0.1"}
+    allowed_ips = {"0.0.0.0", "127.0.0.1", "127.0.0.11"}  # .11 = Docker embedded DNS
     for path in (COMPOSE, NGINX):
         stripped = _strip_interpolation(path.read_text(encoding="utf-8"))
         assert not LITERAL_URL.search(stripped), path.name
@@ -106,12 +108,11 @@ def test_nginx_routes_cover_all_prefixes() -> None:
 
 def test_mcp_location_passes_path_unchanged() -> None:
     text = NGINX.read_text(encoding="utf-8")
-    mcp_blocks = [
-        line for line in text.splitlines() if "proxy_pass http://${MCP_UPSTREAM}" in line
-    ]
+    assert "set $mcp_upstream ${MCP_UPSTREAM};" in text
+    mcp_blocks = [line for line in text.splitlines() if "proxy_pass http://$mcp_upstream" in line]
     assert mcp_blocks
     for line in mcp_blocks:
-        assert line.strip() == "proxy_pass http://${MCP_UPSTREAM};" or "/healthz" in line
+        assert line.strip() == "proxy_pass http://$mcp_upstream;" or "/healthz" in line
 
 
 def test_up_public_and_compose_read_tokens_from_env_local() -> None:

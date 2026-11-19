@@ -1,7 +1,8 @@
-.PHONY: test lint mypy triage-smoke triage-record openapi run-soar run-mcp e2e-soar up up-public down reset health triage-seed compose-config env-merge env-set gen-secret scenarios-check webhook-check
+.PHONY: test lint mypy triage-smoke triage-record openapi run-soar run-mcp e2e-soar up up-public down reset health triage-seed compose-config env-merge env-set gen-secret scenarios-check stream-start stream-script stream-stop stream-status webhook-check
 
 PYTHON ?= python3
 ENV_FILE ?= .env.local
+SEED_HERO ?= 1
 COMPOSE = ENV_FILE=$(ENV_FILE) docker compose --env-file $(ENV_FILE) -f deploy/compose.yml
 
 test:
@@ -49,6 +50,7 @@ gen-secret:
 
 up: _check_env
 	$(COMPOSE) up -d --build --wait
+	$(COMPOSE) restart nginx
 
 up-public: _check_env
 	@set -a && . ./.env.local && set +a && \
@@ -74,7 +76,8 @@ reset: _check_env
 	} || { echo 'reset failed at step 2 (mock_soar)' >&2; exit 1; }; \
 	{ \
 		echo 'Step 3: mock splunk reset'; \
-		curl -sf -X POST "$$PUBLIC_BASE_URL/splunk/v1/reset" -H 'content-type: application/json' -d '{}'; \
+		if [ "$(SEED_HERO)" = "0" ]; then _body='{"seed_hero":false}'; else _body='{}'; fi; \
+		curl -sf -X POST "$$PUBLIC_BASE_URL/splunk/v1/reset" -H 'content-type: application/json' -d "$$_body"; \
 	} || { echo 'reset failed at step 3 (mock_splunk)' >&2; exit 1; }; \
 	$(COMPOSE) start triage_worker || true; \
 	$(MAKE) health
@@ -94,6 +97,10 @@ compose-config:
 stream-start: _check_env
 	@set -a && . ./$(ENV_FILE) && set +a; \
 	curl -sf -X POST "$$PUBLIC_BASE_URL/splunk/v1/stream/start" -H 'content-type: application/json' -d '{}'
+
+stream-script: _check_env
+	@set -a && . ./$(ENV_FILE) && set +a; \
+	curl -sf -X POST "$$PUBLIC_BASE_URL/splunk/v1/stream/start" -H 'content-type: application/json' -d '{"mode":"script"}'
 
 stream-stop: _check_env
 	@set -a && . ./$(ENV_FILE) && set +a; \
