@@ -16,3 +16,4 @@ These rules apply to the FORGE case store, the `/v1` case API, and Mock Splunk.
 7. Modules stay independently testable: `state.py` has no I/O, the service runs without HTTP, and routes hold no logic.
 8. Mock Splunk (`services/mock_splunk`) is a read-only data source plus `reset` and `replay`. It holds no case logic and writes nothing to the Case API.
 9. A new Mock Splunk source follows `contracts/C2-contract.md` §4 only: one module, one fixture file, and one registry line. Do not change routes, shared models, the OpenAPI spec, or tests to add a source.
+10. LangGraph triage (`services/triage`) talks to Mock Splunk and the Case API over HTTP only. Routing policy lives in `config/routing.yaml` and `services/triage/routing.py`; the model's `recommended_route` is advisory.

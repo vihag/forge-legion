@@ -20,6 +20,7 @@ class CaseStatus(StrEnum):
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
     SUBMITTED = "SUBMITTED"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
 
 
 class APIModel(BaseModel):
@@ -44,6 +45,15 @@ class TriageCreate(APIModel):
     severity: Severity
     rationale: str = Field(min_length=1)
     model: str = Field(min_length=1)
+    actor: Actor
+
+
+ReviewFlagReason = Literal["model_call_failed", "invalid_model_output", "no_route_matched"]
+
+
+class ReviewFlagCreate(APIModel):
+    reason: ReviewFlagReason
+    detail: str = Field(min_length=1, max_length=2000)
     actor: Actor
 
 

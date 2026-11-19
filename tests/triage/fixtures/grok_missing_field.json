@@ -1,0 +1,14 @@
+{
+  "id": "chatcmpl-fixture-missing-field",
+  "model": "grok-4.3",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"original_severity\":\"medium\",\"assessed_severity\":\"high\",\"assessment_confidence\":0.5,\"rationale\":\"missing evidence refs field.\",\"mitre_techniques\":[\"T1078\"],\"recommended_route\":\"review\",\"additional_evidence_needed\":[]}"
+      }
+    }
+  ],
+  "usage": {}
+}

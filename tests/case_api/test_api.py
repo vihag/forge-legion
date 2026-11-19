@@ -454,3 +454,53 @@ def test_get_routes_non_int_id_returns_422(client: TestClient, path: str) -> Non
     body = response.json()
     assert body["error"] == "validation_error"
     assert set(body) == {"error", "message", "details"}
+
+
+def test_list_cases_filter_by_alert_id(client: TestClient) -> None:
+    created = ingest(client, "ALT-FILTER-1")
+    ingest(client, "ALT-FILTER-2")
+    response = client.get("/v1/cases", params={"alert_id": "ALT-FILTER-1"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+    assert body["items"][0]["alert_id"] == "ALT-FILTER-1"
+    assert body["items"][0]["id"] == created["id"]
+    missing = client.get("/v1/cases", params={"alert_id": "ALT-MISSING"})
+    assert missing.json()["total"] == 0
+
+
+def test_review_flag_from_investigating_returns_409(client: TestClient) -> None:
+    case = ingest(client, "ALT-REVIEW-409")
+    case_id = case["id"]
+    triage(client, case_id)
+    evidence = add_evidence(client, case_id)
+    add_finding(client, case_id, [evidence["id"]])
+    response = client.post(
+        f"/v1/cases/{case_id}/review-flag",
+        json={
+            "reason": "invalid_model_output",
+            "detail": "not allowed here",
+            "actor": SYSTEM,
+        },
+    )
+    assert response.status_code == 409
+    assert client.get(f"/v1/cases/{case_id}").json()["status"] == "INVESTIGATING"
+
+
+def test_retriage_from_needs_review_returns_triaged(client: TestClient) -> None:
+    case = ingest(client, "ALT-RETRIAGE-REVIEW")
+    case_id = case["id"]
+    flagged = client.post(
+        f"/v1/cases/{case_id}/review-flag",
+        json={
+            "reason": "model_call_failed",
+            "detail": "temporary outage",
+            "actor": SYSTEM,
+        },
+    )
+    assert flagged.status_code == 200
+    assert flagged.json()["status"] == "NEEDS_REVIEW"
+    retriaged = triage(client, case_id, severity="high")
+    assert retriaged["status"] == "TRIAGED"
+    assert retriaged["triage_severity"] == "high"

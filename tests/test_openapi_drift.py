@@ -20,6 +20,7 @@ CASE_METHODS = {
     "/v1/cases/{case_id}/soar-submission": {"post"},
     "/v1/cases/{case_id}/view": {"get"},
     "/v1/cases/{case_id}/triage": {"post"},
+    "/v1/cases/{case_id}/review-flag": {"post"},
     "/v1/events": {"get"},
 }
 

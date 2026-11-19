@@ -1,0 +1,7 @@
+version: 1
+privileged_account_patterns: ['^adm\.', '^da-', '^svc-admin']
+rules:
+  - {name: privileged_account_collaborative, when: {privileged_account: true}, route: collaborative}
+  - {name: high_or_critical_collaborative, when: {assessed_severity_in: [high, critical]}, route: collaborative}
+  - {name: low_medium_autonomous, when: {assessed_severity_in: [low, medium]}, route: autonomous}
+default_route: review

@@ -257,6 +257,28 @@ def test_reject_writes_exactly_one_disposition_rejected_event(client: TestClient
     assert [item["type"] for item in events].count("disposition.rejected") == 1
 
 
+def test_review_flag_writes_one_case_review_flagged_event(client: TestClient) -> None:
+    case = ingest(client, "ALT-REVIEW-FLAG")
+    case_id = case["id"]
+    before = all_events(client)
+    response = client.post(
+        f"/v1/cases/{case_id}/review-flag",
+        json={
+            "reason": "no_route_matched",
+            "detail": "policy sent to review",
+            "actor": {"id": "triage-langgraph", "type": "system"},
+        },
+    )
+    assert response.status_code == 200
+    events = all_events(client)
+    assert len(events) == len(before) + 1
+    event = events[-1]
+    assert event["type"] == "case.review_flagged"
+    assert event["from_status"] == "NEW"
+    assert event["to_status"] == "NEEDS_REVIEW"
+    assert event["payload"]["reason"] == "no_route_matched"
+
+
 def test_decision_missing_rationale_422_writes_no_event(client: TestClient) -> None:
     proposed = walk_to_proposed(client, "ALT-NO-RATIONALE")
     case_id = proposed["case_id"]

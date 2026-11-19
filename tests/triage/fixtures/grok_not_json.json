@@ -1,0 +1,14 @@
+{
+  "id": "chatcmpl-fixture-not-json",
+  "model": "grok-4.3",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "This is not JSON."
+      }
+    }
+  ],
+  "usage": {}
+}

@@ -1,0 +1,14 @@
+{
+  "id": "chatcmpl-fixture-bad-severity",
+  "model": "grok-4.3",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"original_severity\":\"medium\",\"assessed_severity\":\"urgent\",\"assessment_confidence\":0.5,\"rationale\":\"bad severity value.\",\"evidence_references\":[\"EV-AUTH-0002\"],\"mitre_techniques\":[\"T1078\"],\"recommended_route\":\"review\",\"additional_evidence_needed\":[]}"
+      }
+    }
+  ],
+  "usage": {}
+}
