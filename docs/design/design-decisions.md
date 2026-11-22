@@ -103,6 +103,17 @@ Short ADR-style records. Each entry is scoped to what is enforced in this reposi
 
 ---
 
+## Manual Langfuse spans vs LangGraph `CallbackHandler`
+
+| | |
+| --- | --- |
+| **Context** | C10 added optional Langfuse tracing without changing triage behaviour (`contracts/C10-contract.md` §0). |
+| **Decision** | Manual `Tracer` spans around each LangGraph node and the raw httpx Grok call, not the LangChain callback handler. |
+| **Alternatives** | `CallbackHandler` would serialize full graph state (alert, evidence) on every node and would not attribute the httpx generation with model, usage, and errors (`contracts/C10-contract.md` §0, points 1–2). |
+| **Consequences** | Spans carry summaries only (`keys`, optional `evidence_count`; generation input is the prompt user message) — a coarse trace shape suited to Langfuse Hobby limits. Only `tracing_langfuse.py` imports the SDK (`tracing.py:build_tracer`, 174–185). The contract notes that a stand-in client is enough to pin the span shape, with no callback internals (`contracts/C10-contract.md` §0, point 3). |
+
+---
+
 ## Splunk/SOAR mocks behind real API contracts
 
 | | |

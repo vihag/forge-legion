@@ -82,3 +82,16 @@ Failures set `error_reason` to `invalid_model_output` or `model_call_failed`.
 | Backoff | **1s, 2s, 4s** between retries on 429, ≥500, or transport errors; other 4xx are not retried |
 
 Delivery is in-process (queue + daemon thread); URL and key are not logged.
+
+## Tracing
+
+When gated on, the worker wraps each alert in one Langfuse trace named `triage` (`services/triage/tracing.py:triage_with_trace`, 250–296; root span in `tracing_langfuse.py:trace_alert`, 74–98). LangGraph nodes run inside child spans named after the node (`graph.py` wraps each `add_node` at 351–376 via `node_span`, 357–360). The Grok HTTP call adds a generation observation `grok.assess` under `grok_assess` with prompt input `{"user_message": ...}` (`graph.py:grok_assess`, 137–140; `tracing_langfuse.py:generation_span`, 126–141). After routing and optional auto-resolve, `finalize` records route/outcome tags and metadata (`tracing_langfuse.py:finalize`, 161–198).
+
+| Score | Emitted when | Code |
+| --- | --- | --- |
+| `assessment_confidence` | Case has a stored confidence and outcome is not `skipped_existing` | `tracing.py:triage_with_trace` (295–296); `tracing_langfuse.py:finalize` (182–187) |
+| `auto_resolve_gate` | Policy route tag is `autonomous` (`1` if gate `pass`, else `0` with rule in comment) | `tracing_langfuse.py:finalize` (188–198) |
+
+**Opt-in gate:** tracing runs only when `LANGFUSE_ENABLED=1` and `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_HOST` are all non-empty (`tracing.py:_gating_disabled_reason`, 26–39); otherwise `NoopTracer` is used. The Langfuse SDK loads lazily via `importlib` only after the gate passes (`tracing.py:build_tracer`, 174–185). Import or runtime errors log and fall back to no-op — triage outcomes are unchanged (`tracing_langfuse.py:_rate_limited_error`, 38–47 disables after 5 errors in the worker process (the counter is not reset on success)).
+
+Setup and shutdown: [Observability](observability.md).
