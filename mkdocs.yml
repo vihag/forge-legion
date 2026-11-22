@@ -1,0 +1,50 @@
+site_name: FORGE × LEGION
+site_url: https://vihag.github.io/forge-legion/
+repo_url: https://github.com/vihag/forge-legion
+repo_name: vihag/forge-legion
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+nav:
+  - Overview: index.md
+  - Case API: case-api.md
+  - Triage: triage.md
+  - Routing policy: routing.md
+  - MCP: mcp.md
+  - LEGION bots: bots.md
+  - FORGE build loop: forge.md
+  - Trust: trust.md
+  - FAQ: faq.md
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search
