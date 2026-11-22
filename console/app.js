@@ -1,7 +1,13 @@
 "use strict";
 
 const METRICS_URL = "/case/v1/metrics";
+const CASES_URL = "/case/v1/cases";
 const POLL_MS = 5000;
+const QUEUE_POLL_MS = 5000;
+const CASE_PAGE_SIZE = 200;
+const CASE_PAGE_MAX = 500;
+const DEFAULT_GROKBOT_TEMPLATE =
+  "grokbot://app/v1/agent?id=8818388d-d88b-4b48-a907-11dcc6b8547d";
 
 const SEVERITY_ORDER = ["low", "medium", "high", "critical"];
 
@@ -42,7 +48,10 @@ const AGENT_NAMES = {
 };
 
 const FILTER_KEY = "legion.console.feedFilter";
+const TAB_KEY = "legion.console.activeTab";
+const QUEUE_FILTER_KEY = "legion.console.queueFilter";
 const FILTERS = ["all", "auto", "legion", "awaiting", "analyst"];
+const QUEUE_FILTERS = ["all", "approvals", "needs_investigating"];
 const FEED_MAX = 50;
 
 /*
@@ -560,6 +569,389 @@ async function refresh() {
   }
 }
 
+const queueState = {
+  filter: loadQueueFilter(),
+  cases: [],
+  selectedId: null,
+  selectedView: null,
+};
+
+function legionQueue() {
+  return window.LegionQueue;
+}
+
+function loadQueueFilter() {
+  try {
+    const saved = window.localStorage.getItem(QUEUE_FILTER_KEY);
+    return QUEUE_FILTERS.includes(saved) ? saved : "all";
+  } catch (_err) {
+    return "all";
+  }
+}
+
+function saveQueueFilter(value) {
+  try {
+    window.localStorage.setItem(QUEUE_FILTER_KEY, value);
+  } catch (_err) {
+    /* session only */
+  }
+}
+
+function loadTab() {
+  try {
+    const saved = window.localStorage.getItem(TAB_KEY);
+    return saved === "queue" ? "queue" : "overview";
+  } catch (_err) {
+    return "overview";
+  }
+}
+
+function saveTab(tab) {
+  try {
+    window.localStorage.setItem(TAB_KEY, tab);
+  } catch (_err) {
+    /* session only */
+  }
+}
+
+function getLinkTemplate() {
+  const cfg = window.LEGION_CONFIG;
+  const raw = cfg && cfg.grokbotCenturionLinkTemplate;
+  if (!raw || /^\$\{/.test(String(raw))) {
+    return DEFAULT_GROKBOT_TEMPLATE;
+  }
+  return String(raw);
+}
+
+let activeTab = loadTab();
+let metricsTimer = null;
+let queueTimer = null;
+
+function setTab(tab) {
+  activeTab = tab === "queue" ? "queue" : "overview";
+  saveTab(activeTab);
+  const overview = document.getElementById("panel-overview");
+  const queuePanel = document.getElementById("panel-queue");
+  overview?.classList.toggle("hidden", activeTab !== "overview");
+  queuePanel?.classList.toggle("hidden", activeTab !== "queue");
+  for (const button of document.querySelectorAll(".tab-bar .tab")) {
+    button.setAttribute("aria-pressed", String(button.dataset.tab === activeTab));
+  }
+  const footer = document.getElementById("footer-refresh");
+  if (footer) {
+    footer.textContent =
+      activeTab === "queue"
+        ? "Analyst queue refreshes every 5 seconds while this tab is open"
+        : "Refreshes every 5 seconds";
+  }
+  if (activeTab === "overview") {
+    stopQueuePoll();
+    startMetricsPoll();
+  } else {
+    stopMetricsPoll();
+    startQueuePoll();
+  }
+}
+
+function initTabs() {
+  const bar = document.querySelector(".tab-bar");
+  if (!bar) {
+    return;
+  }
+  bar.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-tab]");
+    if (!button) {
+      return;
+    }
+    setTab(button.dataset.tab);
+  });
+  setTab(activeTab);
+}
+
+function startMetricsPoll() {
+  if (metricsTimer != null) {
+    return;
+  }
+  refresh();
+  metricsTimer = window.setInterval(refresh, POLL_MS);
+}
+
+function stopMetricsPoll() {
+  if (metricsTimer != null) {
+    window.clearInterval(metricsTimer);
+    metricsTimer = null;
+  }
+}
+
+function startQueuePoll() {
+  if (queueTimer != null) {
+    return;
+  }
+  refreshQueue();
+  queueTimer = window.setInterval(refreshQueue, QUEUE_POLL_MS);
+}
+
+function stopQueuePoll() {
+  if (queueTimer != null) {
+    window.clearInterval(queueTimer);
+    queueTimer = null;
+  }
+}
+
+async function fetchOpenCases() {
+  let offset = 0;
+  let total = 0;
+  const items = [];
+  do {
+    const params = new URLSearchParams({
+      limit: String(CASE_PAGE_SIZE),
+      offset: String(offset),
+    });
+    const response = await fetch(`${CASES_URL}?${params}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      throw new Error("cases list failed");
+    }
+    const page = await response.json();
+    total = Number(page.total) || 0;
+    for (const row of page.items || []) {
+      items.push(row);
+    }
+    offset += CASE_PAGE_SIZE;
+  } while (offset < total && offset < CASE_PAGE_MAX);
+  const L = legionQueue();
+  return L ? L.filterOpenCases(items) : items;
+}
+
+function renderQueueTable() {
+  const L = legionQueue();
+  const body = document.querySelector("#queue-table tbody");
+  if (!body || !L) {
+    return;
+  }
+  const rows = L.sortQueueCases(L.applyQueueFilter(queueState.cases, queueState.filter));
+  body.replaceChildren();
+  if (rows.length === 0) {
+    const tr = el("tr");
+    const td = el("td", "empty", "No open cases in this view");
+    td.colSpan = 5;
+    tr.appendChild(td);
+    body.appendChild(tr);
+    return;
+  }
+  const now = Date.now();
+  for (const row of rows) {
+    const tr = el("tr");
+    tr.tabIndex = 0;
+    if (queueState.selectedId === row.id) {
+      tr.classList.add("selected");
+    }
+    const statusTd = el("td");
+    statusTd.appendChild(pill(STATUS_LABELS, row.status, "pill"));
+    const sevTd = el("td", "sev-cell");
+    sevTd.appendChild(severityChip(row.severity || row.splunk_severity));
+    const ruleTd = el("td", null, L.ruleLabel(row));
+    const ageTd = el("td", null, L.formatQueueAge(row.created_at, now));
+    const alertTd = el("td", "alert-id", row.alert_id);
+    tr.append(statusTd, sevTd, ruleTd, ageTd, alertTd);
+    tr.addEventListener("click", () => {
+      selectQueueCase(row.id);
+    });
+    tr.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        selectQueueCase(row.id);
+      }
+    });
+    body.appendChild(tr);
+  }
+}
+
+function setDetailText(id, value) {
+  const node = document.getElementById(id);
+  if (node) {
+    node.textContent = value == null || value === "" ? "—" : String(value);
+  }
+}
+
+function fillList(id, lines) {
+  const list = document.getElementById(id);
+  if (!list) {
+    return;
+  }
+  list.replaceChildren();
+  if (!lines || lines.length === 0) {
+    const li = el("li", "empty", "None yet");
+    list.appendChild(li);
+    return;
+  }
+  for (const line of lines) {
+    list.appendChild(el("li", null, line));
+  }
+}
+
+function updateGrokButton(view) {
+  const link = document.getElementById("queue-grok-link");
+  const L = legionQueue();
+  if (!link || !L || !view) {
+    return;
+  }
+  const built = L.buildGrokLink(getLinkTemplate(), view.id, view.alert_id);
+  if (L.isAllowedLinkScheme(built)) {
+    link.href = built;
+    link.removeAttribute("aria-disabled");
+  } else {
+    link.href = "#";
+    link.setAttribute("aria-disabled", "true");
+  }
+}
+
+function renderQueueDetail(view) {
+  const L = legionQueue();
+  const body = document.getElementById("queue-detail-body");
+  const subtitle = document.getElementById("queue-detail-sub");
+  const title = document.getElementById("queue-detail-title");
+  if (!body || !L || !view) {
+    body?.classList.add("hidden");
+    return;
+  }
+  body.classList.remove("hidden");
+  if (title) {
+    title.textContent = `Case #${view.id}`;
+  }
+  if (subtitle) {
+    subtitle.textContent = view.alert_id || "";
+  }
+  setDetailText("queue-detail-summary", view.summary || "—");
+  const notes = [];
+  for (const item of L.centurionFindings(view.findings)) {
+    notes.push(item.statement);
+  }
+  for (const event of L.centurionAudit(view.audit)) {
+    const who = event.actor?.id ? `${event.actor.id}: ` : "";
+    const payload =
+      event.payload && typeof event.payload === "object" ? JSON.stringify(event.payload) : "";
+    const detail = payload ? `${event.type} — ${payload}` : String(event.type || "");
+    notes.push(`${who}${detail}`);
+  }
+  fillList("queue-centurion-notes", notes);
+  const findingLines = (view.findings || []).map((f) => {
+    const conf =
+      f.confidence != null ? ` · confidence ${Math.round(Number(f.confidence) * 100)}%` : "";
+    return `${f.kind}: ${f.statement}${conf}`;
+  });
+  fillList("queue-findings", findingLines);
+  if (view.proposed_disposition) {
+    setDetailText(
+      "queue-disposition",
+      `${view.proposed_disposition.action}: ${view.proposed_disposition.rationale}`,
+    );
+  } else {
+    setDetailText("queue-disposition", "—");
+  }
+  setDetailText("queue-approval-state", L.approvalState(view));
+  setDetailText(
+    "queue-evidence-count",
+    `${(view.evidence || []).length} item${(view.evidence || []).length === 1 ? "" : "s"}`,
+  );
+  updateGrokButton(view);
+}
+
+async function selectQueueCase(caseId) {
+  queueState.selectedId = caseId;
+  renderQueueTable();
+  const body = document.getElementById("queue-detail-body");
+  body?.classList.add("hidden");
+  try {
+    const response = await fetch(`${CASES_URL}/${caseId}/view`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      return;
+    }
+    const view = await response.json();
+    queueState.selectedView = view;
+    renderQueueDetail(view);
+  } catch (_err) {
+    /* keep list usable */
+  }
+}
+
+async function refreshQueue() {
+  if (activeTab !== "queue") {
+    return;
+  }
+  try {
+    queueState.cases = await fetchOpenCases();
+    renderQueueTable();
+    if (queueState.selectedId != null) {
+      const still = queueState.cases.some((row) => row.id === queueState.selectedId);
+      if (still) {
+        await selectQueueCase(queueState.selectedId);
+      } else {
+        queueState.selectedId = null;
+        queueState.selectedView = null;
+        document.getElementById("queue-detail-body")?.classList.add("hidden");
+        const subtitle = document.getElementById("queue-detail-sub");
+        if (subtitle) {
+          subtitle.textContent = "Select a case to load its view.";
+        }
+      }
+    }
+    document.getElementById("live-indicator")?.classList.remove("stale");
+    const updated = document.getElementById("last-updated");
+    if (updated) {
+      updated.textContent = `Live · updated ${clock(new Date())}`;
+    }
+  } catch (_err) {
+    document.getElementById("live-indicator")?.classList.add("stale");
+  }
+}
+
+function initQueueFilter() {
+  const group = document.getElementById("queue-filter");
+  if (!group) {
+    return;
+  }
+  for (const input of group.querySelectorAll('input[type="radio"]')) {
+    input.checked = input.value === queueState.filter;
+    input.addEventListener("change", () => {
+      if (!input.checked) {
+        return;
+      }
+      queueState.filter = input.value;
+      saveQueueFilter(queueState.filter);
+      renderQueueTable();
+    });
+  }
+}
+
+function initQueueActions() {
+  const copyBtn = document.getElementById("queue-copy-id");
+  const status = document.getElementById("queue-copy-status");
+  copyBtn?.addEventListener("click", async () => {
+    if (queueState.selectedId == null) {
+      return;
+    }
+    const text = String(queueState.selectedId);
+    try {
+      await navigator.clipboard.writeText(text);
+      if (status) {
+        status.textContent = "Case id copied";
+        status.classList.remove("hidden");
+        window.setTimeout(() => status.classList.add("hidden"), 2000);
+      }
+    } catch (_err) {
+      if (status) {
+        status.textContent = "Could not copy";
+        status.classList.remove("hidden");
+      }
+    }
+  });
+}
+
 initFilter();
-refresh();
-window.setInterval(refresh, POLL_MS);
+initTabs();
+initQueueFilter();
+initQueueActions();

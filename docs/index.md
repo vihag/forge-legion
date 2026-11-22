@@ -93,8 +93,14 @@ sequenceDiagram
 | MCP adapter | `/mcp` (11 tools) and `/mcp-analyst` (1 tool) | `services/mcp_adapter/` |
 | Routine webhook | POST when status is `TRIAGED` | `services/triage/webhook.py` |
 | Mock SOAR | Idempotent SOAR submissions and tickets | `services/mock_soar/` |
-| LEGION Command Center | Static console polling metrics | `console/` via nginx `/console/` |
+| LEGION Command Center | Static console: overview metrics and read-only analyst queue | `console/` via nginx `/console/` |
 | nginx gateway | Default port 8080: `/case/`, `/splunk/`, `/soar/`, `/mcp`, `/console/` | `deploy/nginx/` |
+
+## Analyst queue
+
+The **Analyst queue** tab in the LEGION Command Center lists open cases from the Case API (`GET /case/v1/cases` and `GET /case/v1/cases/{id}/view`). It is **read-only**: no approve or reject controls in the browser. Sorting prioritises cases waiting on an analyst (`DISPOSITION_PROPOSED`, then `NEEDS_REVIEW`), then severity, then age. **Approvals happen with CENTURION in Grok Bot** via the **Open in Grok Bot** link.
+
+The deep link template is supplied at runtime as `GROKBOT_CENTURION_LINK_TEMPLATE` (nginx serves `/console/config.js` on the local gateway with placeholders `{case_id}`, `{alert_id}`, and `{text}`). Override it in `.env.local` and restart the stack when you need a different scheme or agent id.
 
 Public exposure (optional ngrok profile) serves **MCP only** on the public gateway port; Case, Splunk, SOAR, and console stay on the local gateway.
 
