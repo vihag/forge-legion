@@ -107,10 +107,27 @@ function formatQueueAge(createdAt, nowMs) {
   return `${days}d`;
 }
 
+function resolveLinkTemplate(cfg, fallback) {
+  const raw = cfg && cfg.grokbotCenturionLinkTemplate;
+  const value = raw == null ? "" : String(raw).trim();
+  if (!value || /^\$\{/.test(value)) {
+    return fallback;
+  }
+  return value;
+}
+
+function alertIdLabel(alertId) {
+  if (alertId == null || String(alertId).trim() === "") {
+    return "no alert id";
+  }
+  return String(alertId);
+}
+
 function buildGrokLink(template, caseId, alertId) {
-  const text = `Let's work case ${caseId} (${alertId})`;
+  const alertLabel = alertIdLabel(alertId);
+  const text = `Let's work case ${caseId} (${alertLabel})`;
   const encCase = encodeURIComponent(String(caseId));
-  const encAlert = encodeURIComponent(String(alertId ?? ""));
+  const encAlert = encodeURIComponent(alertLabel);
   const encText = encodeURIComponent(text);
   return String(template || "")
     .replaceAll("{case_id}", encCase)
@@ -177,6 +194,7 @@ const api = {
   humanStatus,
   ruleLabel,
   formatQueueAge,
+  resolveLinkTemplate,
   buildGrokLink,
   isAllowedLinkScheme,
   isCenturionActor,

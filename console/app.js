@@ -615,12 +615,7 @@ function saveTab(tab) {
 }
 
 function getLinkTemplate() {
-  const cfg = window.LEGION_CONFIG;
-  const raw = cfg && cfg.grokbotCenturionLinkTemplate;
-  if (!raw || /^\$\{/.test(String(raw))) {
-    return DEFAULT_GROKBOT_TEMPLATE;
-  }
-  return String(raw);
+  return legionQueue().resolveLinkTemplate(window.LEGION_CONFIG, DEFAULT_GROKBOT_TEMPLATE);
 }
 
 let activeTab = loadTab();

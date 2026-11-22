@@ -100,7 +100,7 @@ sequenceDiagram
 
 The **Analyst queue** tab in the LEGION Command Center lists open cases from the Case API (`GET /case/v1/cases` and `GET /case/v1/cases/{id}/view`). It is **read-only**: no approve or reject controls in the browser. Sorting prioritises cases waiting on an analyst (`DISPOSITION_PROPOSED`, then `NEEDS_REVIEW`), then severity, then age. **Approvals happen with CENTURION in Grok Bot** via the **Open in Grok Bot** link.
 
-The deep link template is supplied at runtime as `GROKBOT_CENTURION_LINK_TEMPLATE` (nginx serves `/console/config.js` on the local gateway with placeholders `{case_id}`, `{alert_id}`, and `{text}`). Override it in `.env.local` and restart the stack when you need a different scheme or agent id.
+The deep link template is supplied at runtime as `GROKBOT_CENTURION_LINK_TEMPLATE` (nginx serves `/console/config.js` on the local gateway with placeholders `{case_id}`, `{alert_id}`, and `{text}`). Override it with `make env-set KEY=GROKBOT_CENTURION_LINK_TEMPLATE VALUE=...` and restart the stack when you need a different scheme or agent id. The template must not contain `'`, `"`, `$`, `\`, or spaces.
 
 Public exposure (optional ngrok profile) serves **MCP only** on the public gateway port; Case, Splunk, SOAR, and console stay on the local gateway.
 
