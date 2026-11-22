@@ -1,5 +1,7 @@
 # forge-legion
 
+**Documentation:** [https://vihag.github.io/forge-legion/](https://vihag.github.io/forge-legion/)
+
 FORGE × LEGION: agentic SOC triage and investigation on legacy Splunk, powered by Grok Bots, LangGraph and the Grok API.
 
 This repository ships the C1 case store and case API (`/v1`), the C2 Mock Splunk service, the C3 LangGraph triage runner, C4 Mock SOAR, the MCP adapter, and the C5 compose deployment behind nginx on one origin. The binding contracts are [`contracts/C1-contract.md`](contracts/C1-contract.md), [`contracts/C2-contract.md`](contracts/C2-contract.md), [`contracts/C3-contract.md`](contracts/C3-contract.md), [`contracts/C4-contract.md`](contracts/C4-contract.md), and [`contracts/C5-contract.md`](contracts/C5-contract.md).
