@@ -47,10 +47,11 @@ flowchart TD
 
 | Setting | Value in code |
 | --- | --- |
+| Model | `XAI_MODEL`, default `grok-3-mini` (`config.py`) |
 | Temperature | `0` (`HttpGrokClient`) |
 | Response format | `json_schema` with `strict: True` and `GrokAssessment` schema |
 | HTTP timeout | `30.0` seconds |
-| Retries | Up to **2** attempts on timeout or HTTP ≥500 (`_post_with_retry`) |
+| Retries | Up to **2** attempts on timeout or HTTP ≥500 (`_post_with_retry`); the 2nd attempt has no backoff; 4xx is not retried |
 
 Fixture modes: `GROK_CLIENT=fixture` with file or stream template registry (`StreamFixtureGrokClient`, `FixtureGrokClient`).
 
@@ -76,7 +77,8 @@ Failures set `error_reason` to `invalid_model_output` or `model_call_failed`.
 | Default | Off (`ROUTINE_WEBHOOK_ENABLED` default `0`) |
 | Payload keys | `case_id`, `alert_id`, `severity`, `route`, `rule` |
 | Auth | `Authorization: Bearer` + value from `ROUTINE_WEBHOOK_KEY` |
+| Timeout | `5.0` seconds per attempt |
 | Attempts | **4** max |
-| Backoff | **1s, 2s, 4s** between retries on 429, ≥500, or transport errors |
+| Backoff | **1s, 2s, 4s** between retries on 429, ≥500, or transport errors; other 4xx are not retried |
 
 Delivery is in-process (queue + daemon thread); URL and key are not logged.

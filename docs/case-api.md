@@ -49,6 +49,7 @@ Rejected mutating calls (any 4xx) write **no** audit event.
 stateDiagram-v2
   [*] --> NEW: POST /v1/cases
   NEW --> TRIAGED: triage
+  TRIAGED --> TRIAGED: triage
   NEW --> NEEDS_REVIEW: flag_review
   NEEDS_REVIEW --> TRIAGED: triage
   TRIAGED --> NEEDS_REVIEW: flag_review

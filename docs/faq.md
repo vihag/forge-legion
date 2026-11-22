@@ -46,9 +46,6 @@ No. `AUTO_RESOLVED` is terminal; `submit_to_soar` and tickets need a stored anal
 **Who can approve?**  
 Only requests with `actor.type=analyst` on `POST /v1/cases/{id}/decision`. In demo flow, CENTURION records chat via `/mcp-analyst`.
 
-**Can bots approve themselves?**  
-No approve tool on `/mcp`. Analyst path is separate token and endpoint.
-
 ## Engineering
 
 **How was the code built?**  
