@@ -35,6 +35,47 @@ flowchart LR
   NG --> MCP
 ```
 
+## End-to-end flow (trigger to SOAR)
+
+One alert, every hop. Solid arrows are code paths; the human is the only actor that can approve.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant SPL as Mock Splunk
+  participant LG as Triage worker (LangGraph)
+  participant GK as Grok API
+  participant API as Case API + audit
+  participant C as CENTURION
+  participant S as SENTINELs (Evidence, Threat, Disposition)
+  participant H as Analyst
+  participant SOAR as Mock SOAR
+  LG->>SPL: poll alerts + evidence (every 5s)
+  LG->>API: ingest case (NEW), skip if it already exists
+  LG->>LG: deterministic facts (privileged, crown jewel, geo, RDP)
+  LG->>GK: POST /chat/completions (strict json_schema)
+  GK-->>LG: assessment JSON
+  LG->>LG: parse_assessment: schema, MITRE, citations in sent evidence
+  LG->>LG: routing.yaml first match: autonomous, collaborative or review
+  LG->>API: triage (TRIAGED) + triage_assessment evidence
+  alt autonomous and G1 to G10 pass
+    LG->>API: auto_resolve (AUTO_RESOLVED), no bot, no human
+  else any error or review route
+    LG->>API: flag_review (NEEDS_REVIEW)
+  else stays TRIAGED
+    LG->>C: routine webhook (once per case)
+    opt high or critical
+      C->>H: ask permission to investigate
+      H-->>C: yes
+    end
+    C->>S: delegate (Evidence and Threat, then Disposition)
+    S->>API: findings (INVESTIGATING), proposal (DISPOSITION_PROPOSED)
+    C->>H: recommendation card: approve or reject?
+    H->>API: decision via /mcp-analyst (APPROVED or REJECTED)
+    API->>SOAR: submit, only if APPROVED, once (SUBMITTED)
+  end
+```
+
 ## Stack (in-repo components)
 
 | Component | Role | Package path |
