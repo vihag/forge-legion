@@ -184,31 +184,16 @@
               <p class="explain" id="queue-detail-sub">Select a case to load its view.</p>
             </div>
             <div id="queue-detail-body" class="queue-detail-body hidden">
-              <section class="detail-block">
-                <h3>Summary</h3>
-                <p id="queue-detail-summary" class="detail-text"></p>
-              </section>
-              <section class="detail-block">
-                <h3>CENTURION plan and notes</h3>
-                <ul id="queue-centurion-notes" class="detail-list"></ul>
-              </section>
-              <section class="detail-block">
-                <h3>Findings</h3>
-                <ul id="queue-findings" class="detail-list"></ul>
-              </section>
-              <section class="detail-block">
-                <h3>Proposed disposition</h3>
-                <p id="queue-disposition" class="detail-text"></p>
-                <p id="queue-approval-state" class="detail-text approval-state"></p>
-              </section>
-              <section class="detail-block">
-                <h3>Evidence</h3>
-                <p id="queue-evidence-count" class="detail-text"></p>
-              </section>
-              <div class="queue-actions">
-                <a id="queue-grok-link" class="btn primary" href="#" target="_blank" rel="noopener noreferrer">Open in Grok Bot</a>
-                <button type="button" class="btn" id="queue-copy-id">Copy case id</button>
-              </div>
+              <header id="queue-detail-header" class="detail-header"></header>
+              <section id="queue-key-facts" class="detail-block" aria-label="Key facts"></section>
+              <section id="queue-disposition-block" class="detail-block" aria-label="Proposed disposition"></section>
+              <section id="queue-centurion" class="detail-block" aria-label="CENTURION plan and notes"></section>
+              <section id="queue-findings" class="detail-block" aria-label="Findings"></section>
+              <section id="queue-evidence" class="detail-block" aria-label="Evidence"></section>
+            </div>
+            <div id="queue-actions" class="queue-actions hidden">
+              <a id="queue-grok-link" class="btn primary" href="#" target="_blank" rel="noopener noreferrer">Open in Grok Bot</a>
+              <button type="button" class="btn" id="queue-copy-id">Copy case id</button>
               <p id="queue-copy-status" class="fineprint hidden" aria-live="polite"></p>
             </div>
           </article>

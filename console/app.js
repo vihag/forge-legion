@@ -763,27 +763,258 @@ function renderQueueTable() {
   }
 }
 
-function setDetailText(id, value) {
-  const node = document.getElementById(id);
-  if (node) {
-    node.textContent = value == null || value === "" ? "—" : String(value);
+function appendFormattedText(parent, text) {
+  const L = legionQueue();
+  const parts = L
+    ? L.splitTechnicalTokens(text)
+    : [{ value: String(text == null ? "" : text), mono: false }];
+  for (const part of parts) {
+    if (!part.value) {
+      continue;
+    }
+    if (part.mono) {
+      parent.appendChild(el("span", "mono", part.value));
+    } else {
+      parent.appendChild(document.createTextNode(part.value));
+    }
   }
 }
 
-function fillList(id, lines) {
-  const list = document.getElementById(id);
-  if (!list) {
+function appendProse(parent, text, className) {
+  const node = el("p", className || "prose");
+  appendFormattedText(node, text);
+  parent.appendChild(node);
+  return node;
+}
+
+function appendCollapsible(parent, text, charLimit) {
+  const L = legionQueue();
+  const raw = String(text || "");
+  if (!raw) {
     return;
   }
-  list.replaceChildren();
-  if (!lines || lines.length === 0) {
-    const li = el("li", "empty", "None yet");
+  if (!L || !L.shouldCollapse(raw, charLimit)) {
+    appendProse(parent, raw);
+    return;
+  }
+  const details = el("details", "collapsible");
+  const summary = el("summary", "collapsible-summary");
+  const teaser = el("span", "collapsible-teaser");
+  appendFormattedText(teaser, L.teaserText(raw, charLimit));
+  const toggle = el("span", "collapsible-toggle", "Show more");
+  summary.append(teaser, toggle);
+  const full = el("div", "collapsible-full");
+  appendProse(full, raw);
+  details.append(summary, full);
+  details.addEventListener("toggle", () => {
+    toggle.textContent = details.open ? "Show less" : "Show more";
+  });
+  parent.appendChild(details);
+}
+
+function appendFact(dl, label, fill, wide) {
+  const dd = el("dd");
+  fill(dd);
+  if (!dd.childNodes.length) {
+    return;
+  }
+  const fact = el("div", wide ? "fact wide" : "fact");
+  fact.append(el("dt", null, label), dd);
+  dl.appendChild(fact);
+}
+
+function renderDetailHeader(container, view, L) {
+  container.replaceChildren();
+  const meta = el("div", "detail-header-meta");
+  meta.appendChild(el("span", "mono detail-kicker", `Case #${view.id}`));
+  meta.appendChild(el("span", "mono detail-alert", view.alert_id || "no alert id"));
+  meta.appendChild(el("span", "detail-age", L.formatQueueAge(view.created_at)));
+  container.appendChild(meta);
+  const badges = el("div", "detail-badges");
+  badges.appendChild(severityChip(view.severity || view.splunk_severity));
+  badges.appendChild(pill(STATUS_LABELS, view.status, "pill"));
+  const facts = L.extractKeyFacts(view);
+  for (const flag of facts.flags) {
+    badges.appendChild(el("span", "chip flag-chip", flag));
+  }
+  const approval = L.approvalState(view);
+  if (approval && approval !== "—") {
+    badges.appendChild(el("span", `approval-badge tone-${L.approvalTone(view)}`, approval));
+  }
+  container.appendChild(badges);
+  if (view.summary) {
+    appendCollapsible(container, view.summary);
+  }
+}
+
+function renderKeyFacts(container, view, L) {
+  container.replaceChildren();
+  container.appendChild(el("h3", null, "Key facts"));
+  const facts = L.extractKeyFacts(view);
+  const dl = el("dl", "facts-grid");
+  if (facts.rule) {
+    appendFact(
+      dl,
+      "Rule",
+      (dd) => {
+        dd.textContent = facts.rule;
+      },
+      true,
+    );
+  }
+  if (facts.users.length) {
+    appendFact(dl, facts.users.length === 1 ? "User" : "Users", (dd) => {
+      const list = el("span", "entity-list");
+      for (const user of facts.users) {
+        list.appendChild(el("span", "chip entity-chip mono", user));
+      }
+      dd.appendChild(list);
+    });
+  }
+  const assets = [...facts.hosts, ...facts.ips];
+  if (assets.length) {
+    appendFact(
+      dl,
+      "Assets",
+      (dd) => {
+        const list = el("span", "entity-list");
+        for (const asset of assets) {
+          list.appendChild(el("span", "chip entity-chip mono", asset));
+        }
+        dd.appendChild(list);
+      },
+      true,
+    );
+  }
+  if (facts.techniques.length) {
+    appendFact(
+      dl,
+      "MITRE",
+      (dd) => {
+        const row = el("span", "chip-row");
+        for (const tech of facts.techniques) {
+          row.appendChild(el("span", "chip tech-chip", tech));
+        }
+        dd.appendChild(row);
+      },
+      true,
+    );
+  }
+  if (facts.confidence) {
+    appendFact(dl, "Confidence", (dd) => {
+      dd.textContent = facts.confidence;
+    });
+  }
+  if (facts.verdict) {
+    appendFact(dl, "Verdict", (dd) => {
+      dd.appendChild(pill(VERDICT_LABELS, String(view.verdict || "").toLowerCase(), "verdict"));
+    });
+  }
+  if (!dl.childNodes.length) {
+    container.appendChild(el("p", "empty", "No key facts recorded yet."));
+    return;
+  }
+  container.appendChild(dl);
+}
+
+function renderCenturionNotes(container, view, L) {
+  container.replaceChildren();
+  container.appendChild(el("h3", null, "CENTURION plan & notes"));
+  const notes = L.formatCenturionNotes(view);
+  if (!notes.length) {
+    container.appendChild(el("p", "empty", "No plan or notes from CENTURION yet."));
+    return;
+  }
+  for (const note of notes) {
+    const card = el("article", "note-card");
+    appendCollapsible(card, note.text);
+    container.appendChild(card);
+  }
+}
+
+function renderFindings(container, view, L) {
+  container.replaceChildren();
+  container.appendChild(el("h3", null, "Findings"));
+  const findings = view.findings || [];
+  if (!findings.length) {
+    container.appendChild(el("p", "empty", "No findings recorded yet."));
+    return;
+  }
+  const list = el("div", "finding-list");
+  for (const finding of findings) {
+    const model = L.findingCardModel(finding, view.evidence);
+    const kindClass = model.kind ? `kind-${model.kind}` : "";
+    const card = el("article", `finding-card ${kindClass}`.trim());
+    const meta = el("div", "finding-meta");
+    if (model.kind) {
+      meta.appendChild(el("span", `chip kind-chip kind-${model.kind}`, L.humanizeLabel(model.kind)));
+    }
+    meta.appendChild(el("span", "finding-author", model.author));
+    if (model.confidence) {
+      meta.appendChild(el("span", "finding-conf", model.confidence));
+    }
+    card.appendChild(meta);
+    appendCollapsible(card, model.statement, 220);
+    if (model.evidenceRefs.length) {
+      const refs = el("div", "chip-row evidence-refs");
+      for (const ref of model.evidenceRefs) {
+        refs.appendChild(el("span", "chip ref-chip mono", ref));
+      }
+      card.appendChild(refs);
+    }
+    list.appendChild(card);
+  }
+  container.appendChild(list);
+}
+
+function renderDisposition(container, view, L) {
+  container.replaceChildren();
+  container.appendChild(el("h3", null, "Proposed disposition"));
+  const model = L.dispositionModel(view);
+  if (!model) {
+    container.appendChild(el("p", "empty", "No disposition proposed yet."));
+    return;
+  }
+  const card = el("article", `disposition-card tone-${model.tone}`);
+  const rows = el("dl", "facts-grid disposition-facts");
+  appendFact(rows, "Disposition", (dd) => {
+    dd.textContent = model.action;
+  });
+  if (model.soarAction && model.soarAction !== model.action) {
+    appendFact(rows, "SOAR action", (dd) => {
+      const node = el("span");
+      appendFormattedText(node, model.soarAction);
+      dd.appendChild(node);
+    });
+  }
+  card.appendChild(rows);
+  if (model.rationale) {
+    card.appendChild(el("h4", "disposition-rationale-label", "Rationale"));
+    appendCollapsible(card, model.rationale, 200);
+  }
+  card.appendChild(el("p", `approval-badge tone-${model.tone}`, model.approval));
+  container.appendChild(card);
+}
+
+function renderEvidence(container, view, L) {
+  container.replaceChildren();
+  container.appendChild(el("h3", null, "Evidence"));
+  const items = L.evidenceListItems(view.evidence);
+  const count = items.length;
+  container.appendChild(
+    el("p", "evidence-count", `${count} item${count === 1 ? "" : "s"}`),
+  );
+  if (!count) {
+    return;
+  }
+  const list = el("ul", "evidence-list");
+  for (const item of items) {
+    const li = el("li");
+    li.appendChild(el("span", "chip source-chip", item.source));
+    li.appendChild(el("span", "mono", item.ref));
     list.appendChild(li);
-    return;
   }
-  for (const line of lines) {
-    list.appendChild(el("li", null, line));
-  }
+  container.appendChild(list);
 }
 
 function updateGrokButton(view) {
@@ -807,49 +1038,44 @@ function renderQueueDetail(view) {
   const body = document.getElementById("queue-detail-body");
   const subtitle = document.getElementById("queue-detail-sub");
   const title = document.getElementById("queue-detail-title");
+  const actions = document.getElementById("queue-actions");
   if (!body || !L || !view) {
     body?.classList.add("hidden");
+    actions?.classList.add("hidden");
     return;
   }
   body.classList.remove("hidden");
+  actions?.classList.remove("hidden");
   if (title) {
-    title.textContent = `Case #${view.id}`;
+    title.textContent = view.title || `Case #${view.id}`;
   }
   if (subtitle) {
-    subtitle.textContent = view.alert_id || "";
+    subtitle.textContent = "";
   }
-  setDetailText("queue-detail-summary", view.summary || "—");
-  const notes = [];
-  for (const item of L.centurionFindings(view.findings)) {
-    notes.push(item.statement);
+  const header = document.getElementById("queue-detail-header");
+  const facts = document.getElementById("queue-key-facts");
+  const notes = document.getElementById("queue-centurion");
+  const findings = document.getElementById("queue-findings");
+  const disposition = document.getElementById("queue-disposition-block");
+  const evidence = document.getElementById("queue-evidence");
+  if (header) {
+    renderDetailHeader(header, view, L);
   }
-  for (const event of L.centurionAudit(view.audit)) {
-    const who = event.actor?.id ? `${event.actor.id}: ` : "";
-    const payload =
-      event.payload && typeof event.payload === "object" ? JSON.stringify(event.payload) : "";
-    const detail = payload ? `${event.type} — ${payload}` : String(event.type || "");
-    notes.push(`${who}${detail}`);
+  if (facts) {
+    renderKeyFacts(facts, view, L);
   }
-  fillList("queue-centurion-notes", notes);
-  const findingLines = (view.findings || []).map((f) => {
-    const conf =
-      f.confidence != null ? ` · confidence ${Math.round(Number(f.confidence) * 100)}%` : "";
-    return `${f.kind}: ${f.statement}${conf}`;
-  });
-  fillList("queue-findings", findingLines);
-  if (view.proposed_disposition) {
-    setDetailText(
-      "queue-disposition",
-      `${view.proposed_disposition.action}: ${view.proposed_disposition.rationale}`,
-    );
-  } else {
-    setDetailText("queue-disposition", "—");
+  if (disposition) {
+    renderDisposition(disposition, view, L);
   }
-  setDetailText("queue-approval-state", L.approvalState(view));
-  setDetailText(
-    "queue-evidence-count",
-    `${(view.evidence || []).length} item${(view.evidence || []).length === 1 ? "" : "s"}`,
-  );
+  if (notes) {
+    renderCenturionNotes(notes, view, L);
+  }
+  if (findings) {
+    renderFindings(findings, view, L);
+  }
+  if (evidence) {
+    renderEvidence(evidence, view, L);
+  }
   updateGrokButton(view);
 }
 
@@ -858,6 +1084,7 @@ async function selectQueueCase(caseId) {
   renderQueueTable();
   const body = document.getElementById("queue-detail-body");
   body?.classList.add("hidden");
+  document.getElementById("queue-actions")?.classList.add("hidden");
   try {
     const response = await fetch(`${CASES_URL}/${caseId}/view`, {
       headers: { Accept: "application/json" },
@@ -888,6 +1115,11 @@ async function refreshQueue() {
         queueState.selectedId = null;
         queueState.selectedView = null;
         document.getElementById("queue-detail-body")?.classList.add("hidden");
+        document.getElementById("queue-actions")?.classList.add("hidden");
+        const title = document.getElementById("queue-detail-title");
+        if (title) {
+          title.textContent = "Case detail";
+        }
         const subtitle = document.getElementById("queue-detail-sub");
         if (subtitle) {
           subtitle.textContent = "Select a case to load its view.";
