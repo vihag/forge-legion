@@ -46,6 +46,18 @@ EXPECTED_CALLS: list[tuple[str, TargetKind, dict[str, Any]]] = [
         {"name": "fetch_alert", "as_type": "span", "input": {"keys": []}},
     ),
     (
+        "get_prompt",
+        "client",
+        {
+            "name": "triage-system",
+            "label": "production",
+            "type": "text",
+            "fetch_timeout_seconds": 2,
+            "max_retries": 1,
+            "cache_ttl_seconds": 300,
+        },
+    ),
+    (
         "start_as_current_observation",
         "client",
         {
@@ -53,6 +65,7 @@ EXPECTED_CALLS: list[tuple[str, TargetKind, dict[str, Any]]] = [
             "as_type": "generation",
             "model": "grok-3-mini",
             "input": {"user_message": "hi"},
+            "prompt": None,
         },
     ),
     (

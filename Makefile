@@ -1,4 +1,4 @@
-.PHONY: test lint mypy triage-smoke triage-record openapi run-soar run-mcp e2e-soar up up-public down reset health triage-seed compose-config env-merge env-set gen-secret scenarios-check stream-start stream-script stream-stop stream-status webhook-check
+.PHONY: test lint mypy triage-smoke triage-record openapi run-soar run-mcp e2e-soar up up-public down reset health triage-seed compose-config env-merge env-set gen-secret scenarios-check stream-start stream-script stream-stop stream-status webhook-check langfuse-prompt-push
 
 PYTHON ?= python3
 ENV_FILE ?= .env.local
@@ -113,6 +113,9 @@ stream-status: _check_env
 scenarios-check:
 	$(PYTHON) -m services.mock_splunk.scenarios check --world config/world.yaml --dir config/scenarios
 	$(PYTHON) -m services.mock_splunk.scenarios check --world tests/fixtures/scenarios/world.yaml --dir tests/fixtures/scenarios
+
+langfuse-prompt-push:
+	$(PYTHON) scripts/langfuse_prompt_push.py
 
 webhook-check: _check_env
 	@set -a && . ./$(ENV_FILE) && set +a; \

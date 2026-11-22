@@ -253,6 +253,8 @@ def test_trace_shape(triage_stack: TriageDeps) -> None:
         "model_returned",
         "response_id",
         "request_id",
+        "prompt_source",
+        "prompt_version",
     }
     assert all(isinstance(v, str) for v in meta.values())
 

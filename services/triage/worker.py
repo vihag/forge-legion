@@ -19,6 +19,7 @@ from services.triage.grok import (
     HttpGrokClient,
     StreamFixtureGrokClient,
 )
+from services.triage.prompt_source import resolve_system_prompt
 from services.triage.tracing import build_tracer, shutdown_tracer_once, triage_with_trace
 from services.triage.webhook import RoutineWebhook, WebhookPayload
 
@@ -27,7 +28,7 @@ logger = logging.getLogger(__name__)
 WebhookState = Literal["sent", "skipped", "disabled"]
 
 
-def _resolve_grok_client(settings: TriageSettings) -> GrokClient:
+def _resolve_grok_client(settings: TriageSettings, *, system_prompt_text: str) -> GrokClient:
     if settings.grok_client == "fixture":
         if settings.grok_fixture_path is not None:
             return FixtureGrokClient(
@@ -42,7 +43,7 @@ def _resolve_grok_client(settings: TriageSettings) -> GrokClient:
         api_key=api_key,
         model=settings.xai_model,
         base_url=settings.xai_base_url,
-    )
+    ).with_system_prompt(system_prompt_text)
 
 
 def _validate_concurrency() -> int:
@@ -116,10 +117,11 @@ def run_worker() -> int:
     _validate_concurrency()
     poll_s = int(os.environ.get("TRIAGE_WORKER_POLL_S", "5"))
     settings = load_settings()
-    grok_client = _resolve_grok_client(settings)
+    tracer = build_tracer(os.environ)
+    resolved_prompt = resolve_system_prompt(tracer)
+    grok_client = _resolve_grok_client(settings, system_prompt_text=resolved_prompt.text)
     case_client = CaseApiClient(settings.case_api_url)
     splunk_client = SplunkClient(settings.mock_splunk_url)
-    tracer = build_tracer(os.environ)
     deps = TriageDeps(
         case_client=case_client,
         splunk_client=splunk_client,
@@ -127,6 +129,7 @@ def run_worker() -> int:
         routing=settings.routing_config,
         model_requested=settings.xai_model,
         tracer=tracer,
+        system_prompt=resolved_prompt,
     )
     webhook = RoutineWebhook.from_env()
     if webhook is not None:

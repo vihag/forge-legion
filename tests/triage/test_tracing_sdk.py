@@ -9,6 +9,14 @@ from typing import Any
 
 
 @dataclass
+class FakeTextPromptClient:
+    prompt: str
+    version: int = 1
+    name: str = "triage-system"
+    is_fallback: bool = False
+
+
+@dataclass
 class RecordedObservation:
     name: str
     as_type: str
@@ -43,6 +51,31 @@ class FakeLangfuseSDK:
         self.shutdown_calls = 0
         self._fail = fail_after_init
         self._stack: list[RecordedObservation] = []
+        self.get_prompt_calls: list[dict[str, Any]] = []
+        self.create_prompt_calls: list[dict[str, Any]] = []
+        self.prompt_client: FakeTextPromptClient | None = None
+        self.get_prompt_exc: BaseException | None = None
+
+    def get_prompt(self, **kwargs: Any) -> FakeTextPromptClient:
+        if self._fail:
+            raise RuntimeError("sdk_down")
+        self.get_prompt_calls.append(dict(kwargs))
+        if self.get_prompt_exc is not None:
+            raise self.get_prompt_exc
+        if self.prompt_client is None:
+            raise RuntimeError("no prompt")
+        return self.prompt_client
+
+    def create_prompt(self, **kwargs: Any) -> FakeTextPromptClient:
+        if self._fail:
+            raise RuntimeError("sdk_down")
+        self.create_prompt_calls.append(dict(kwargs))
+        version = len(self.create_prompt_calls)
+        return FakeTextPromptClient(
+            prompt=str(kwargs.get("prompt", "")),
+            version=version,
+            is_fallback=False,
+        )
 
     def start_as_current_observation(self, **kwargs: Any) -> Any:
         if self._fail:

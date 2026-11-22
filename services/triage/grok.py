@@ -4,7 +4,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, Self
 
 import httpx
 from pydantic import ValidationError
@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from contracts.mock_splunk import Alert
 from contracts.triage import GrokAssessment
 from services.triage.config import ConfigError
-from services.triage.prompt import SYSTEM_PROMPT
+from services.triage.prompt import SYSTEM_PROMPT as DEFAULT_SYSTEM_PROMPT
 
 MITRE_RE = re.compile(r"^T\d{4}(\.\d{3})?$")
 
@@ -55,10 +55,15 @@ class HttpGrokClient:
             raise ConfigError("XAI_API_KEY is not set")
         self._api_key = api_key
         self._model = model
+        self._system_prompt = DEFAULT_SYSTEM_PROMPT
         self._client = httpx.Client(base_url=base_url, transport=transport, timeout=30.0)
 
     def close(self) -> None:
         self._client.close()
+
+    def with_system_prompt(self, text: str) -> Self:
+        self._system_prompt = text
+        return self
 
     def assess(self, user_message: str, *, evidence_ids: set[str]) -> GrokResponse:
         del evidence_ids
@@ -66,7 +71,7 @@ class HttpGrokClient:
             "model": self._model,
             "temperature": 0,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": self._system_prompt},
                 {"role": "user", "content": user_message},
             ],
             "response_format": {
