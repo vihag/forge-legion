@@ -4,8 +4,8 @@ How the stack detects common failures, what it does, and where that behaviour li
 
 | Failure | Detection | System behaviour | Resulting state | Where in code |
 | --- | --- | --- | --- | --- |
-| Grok HTTP timeout | `httpx.TimeoutException` on POST (30s client timeout) | Up to 2 attempts; then `GrokCallError` with detail `timeout` | `NEEDS_REVIEW` via `flag_review` (`reason=model_call_failed`) | `services/triage/grok.py:_post_with_retry` (58, 90-93); `graph.py:grok_assess` (133-140, 328-334) |
-| Grok 4xx/5xx | Non-success HTTP status after retries | `GrokCallError` `model_call_failed` | `NEEDS_REVIEW` | `grok.py:94-103`; `graph.py:grok_assess` |
+| Grok HTTP timeout | `httpx.TimeoutException` on POST (30s client timeout) | Up to 2 attempts; then `GrokCallError` with detail `timeout` | `NEEDS_REVIEW` via `flag_review` (`reason=model_call_failed`) | `services/triage/grok.py:__init__` (58, 30s timeout); `_post_with_retry` (90-93); `graph.py:grok_assess` (133-140, 328-334) |
+| Grok 4xx/5xx | 5xx: up to 2 attempts; other 4xx: fail immediately (no retry) | `GrokCallError` `model_call_failed` | `NEEDS_REVIEW` | `grok.py:94-103`; `graph.py:grok_assess` |
 | Invalid JSON / schema | `json.loads` or `GrokAssessment.model_validate` fails | `invalid_model_output` | `NEEDS_REVIEW` + `triage_failure` evidence | `grok.py:parse_assessment` (172-182); `graph.py:validate` (169-175) |
 | Hallucinated evidence ID | `evidence_references` ∉ `evidence_map` keys | `invalid_model_output` with `unknown evidence references` | `NEEDS_REVIEW` | `grok.py:186-189`; `tests/triage/fixtures/grok_unknown_evidence_ref.json` |
 | Bad MITRE ID | Regex `MITRE_RE` mismatch | `invalid_model_output` | `NEEDS_REVIEW` | `grok.py:17-18, 183-185` |
