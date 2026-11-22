@@ -22,7 +22,7 @@ flowchart TB
     T[TRANSITIONS / check_transition]
   end
   subgraph L6["L6 — Human approval"]
-    A[/mcp-analyst record_analyst_decision]
+    A["/mcp-analyst record_analyst_decision"]
   end
   subgraph L7["L7 — Audit & provenance"]
     E[triage_assessment evidence + SQLite audit]
