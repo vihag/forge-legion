@@ -30,6 +30,7 @@ nav:
   - MCP: mcp.md
   - LEGION bots: bots.md
   - FORGE build loop: forge.md
+  - Contributing: contributing.md
   - Trust: trust.md
   - Design:
       - How trust is enforced: design/trust-model.md
