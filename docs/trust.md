@@ -1,5 +1,7 @@
 # Trust and verification
 
+For a layered defense-in-depth view with code citations, see [How trust is enforced](design/trust-model.md).
+
 ## Provenance on analyst decisions
 
 `POST /v1/cases/{id}/decision` accepts optional `source` with `chat_ref`, `instruction_text`, `relayed_by`, and `message_ref`. The analyst MCP tool requires these fields. Audit payload on approve/reject includes `source` when present. `instruction_text` must contain the decision word or the API returns `422 instruction_mismatch`.

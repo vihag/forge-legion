@@ -31,6 +31,11 @@ nav:
   - LEGION bots: bots.md
   - FORGE build loop: forge.md
   - Trust: trust.md
+  - Design:
+      - How trust is enforced: design/trust-model.md
+      - Design decisions: design/design-decisions.md
+      - Failure modes: design/failure-modes.md
+      - Limitations and roadmap: design/limitations-and-roadmap.md
   - FAQ: faq.md
 
 markdown_extensions:
