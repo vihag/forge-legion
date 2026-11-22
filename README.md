@@ -1,6 +1,6 @@
 # forge-legion
 
-**Documentation:** [https://vihag.github.io/forge-legion/](https://vihag.github.io/forge-legion/)
+**Documentation:** [https://vihag.github.io/forge-legion/](https://vihag.github.io/forge-legion/) — [How to contribute](https://vihag.github.io/forge-legion/contributing/)
 
 FORGE × LEGION: agentic SOC triage and investigation on legacy Splunk, powered by Grok Bots, LangGraph and the Grok API.
 
