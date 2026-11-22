@@ -114,7 +114,7 @@ Titles are from GitHub (as merged on `main`).
 | C8 | [#32](https://github.com/vihag/forge-legion/pull/32), [#35](https://github.com/vihag/forge-legion/pull/35) | feat(C8): routine webhook, script timing, HITL rotation, incident ticket, get_case include; feat(stream): script mode plays demo_script.yaml + make stream-script |
 | C9 | [#41](https://github.com/vihag/forge-legion/pull/41) | C9: docs site on GitHub Pages |
 | C9b | [#43](https://github.com/vihag/forge-legion/pull/43) | C9b: design docs pages *(merged)* |
-| C10 | [#45](https://github.com/vihag/forge-legion/pull/45) | C10: opt-in Langfuse tracing for triage |
+| C10 | [#45](https://github.com/vihag/forge-legion/pull/45) | C10: Langfuse tracing (opt-in) |
 | C10b | *(this PR)* | C10b: docs refresh for Langfuse tracing |
 
 Evidence-only fixes that landed beside C8:
