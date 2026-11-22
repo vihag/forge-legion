@@ -24,11 +24,20 @@ Skipped existing cases still get `triage` + `finalize` (no generation, no scores
 
 ## Enable tracing
 
-1. Add the variable **names** to `.env.local` by hand (`make env-merge` only adds commented names from `.env.example`). **`make env-set` refuses `*_KEY`** — paste `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` yourself.
-2. Set non-empty `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_HOST` (e.g. `https://cloud.langfuse.com` or your self-hosted URL).
-3. Set `LANGFUSE_ENABLED=1`.
-4. Recreate the stack: `make up`.
+`make env-merge` walks **uncommented** keys in `.env.example` and appends any missing name to `.env.local` with the example value (often empty). Commented lines in `.env.example` — including the `LANGFUSE_*` names — are ignored (`scripts/env_merge.py:_parse_keys`, 13–18; merge loop, 83–89). You must set `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_HOST` yourself; **`make env-set` refuses `*_KEY`** (`scripts/env_merge.py:_refuse_secret_key`, 26–29).
 
-Optional: `LANGFUSE_FLUSH_TIMEOUT_S` (default `5`) bounds client shutdown on worker exit.
+### How to turn it on
 
-The `tracing` optional dependency is installed only in the `triage_worker` and `triage` images. Other services do not import Langfuse.
+1. Ensure `.env.local` exists (`make env-merge` creates it and prints any newly added key names only).
+2. Set non-empty `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_HOST` in `.env.local` by hand.
+3. `make env-set KEY=LANGFUSE_ENABLED VALUE=1` (prints `LANGFUSE_ENABLED` only).
+4. `make up` to recreate containers.
+
+### How to turn it off
+
+1. `make env-set KEY=LANGFUSE_ENABLED VALUE=0`
+2. `make up`
+
+Optional: `LANGFUSE_FLUSH_TIMEOUT_S` (default `5`) bounds client shutdown on worker exit (`tracing.py:_flush_timeout`, 149–156; `tracing_langfuse.py:shutdown`, 202–214).
+
+The `tracing` extra (`langfuse` on PyPI) is installed only on the `triage_worker` and `triage` compose build targets via `PIP_EXTRAS: tracing` (`deploy/compose.yml`, build args ~113 and ~135). Only `services/triage/tracing_langfuse.py` imports the Langfuse SDK; other services never load it.

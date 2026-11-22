@@ -1,6 +1,6 @@
 # Interview FAQ
 
-Short answers grounded in `main` at `80a6a0f`. Figures marked **not measured** have no benchmark in repo.
+Short answers grounded in `main` at `eaf46fc`. Figures marked **not measured** have no benchmark in repo.
 
 ## Problem and demo
 
@@ -73,5 +73,11 @@ Case API after approve; Mock SOAR re-checks approval payload. Actor identity is 
 **Is grok-3-mini benchmarked?**  
 **Not measured.** CI uses `GROK_CLIENT=fixture` without live API calls.
 
-**Is there distributed tracing?**  
-**Not implemented** — no LangSmith or OpenTelemetry in this repo.
+**Is the agent's reasoning traceable?**  
+Yes, when Langfuse tracing is enabled: one root trace `triage` per alert with a span per LangGraph node, a `grok.assess` generation (prompt user message in, parsed assessment JSON out), and a `finalize` span with route/outcome tags (`services/triage/tracing_langfuse.py`; see [Observability](observability.md)). Scores `assessment_confidence` and `auto_resolve_gate` are written when the case and route qualify (`tracing_langfuse.py:finalize`, 182–198). Off by default; gate requires `LANGFUSE_ENABLED=1` plus the three `LANGFUSE_*` credential names (`tracing.py:_gating_disabled_reason`, 26–39).
+
+**What happens if the tracing service is down?**  
+Triage, routing, and Case API writes are identical — tracing is fail-open. SDK errors increment a budget; after five consecutive failures the process stops sending traces for that worker (`tracing_langfuse.py:_rate_limited_error`, 38–42). Worker exit still attempts a bounded flush on a daemon thread (`tracing_langfuse.py:shutdown`, 202–214).
+
+**Is there distributed tracing across MCP and the Case API?**  
+**Not implemented** — Langfuse covers the triage worker path only; no OpenTelemetry or LangSmith elsewhere.

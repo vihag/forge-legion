@@ -63,6 +63,12 @@ flowchart TB
 | Analyst identity | `actor.type` and `analyst_id` on request | Not production IAM — self-declared actor (`docs/trust.md`) |
 | Bot silence / stall recovery | — | **No 2-minute watchdog in repository code at `main`**; any such rule would be external bot skill only |
 
+## Tracing and secrets in Compose
+
+Every Compose service lists the same `env_file` (`.env.local` by default), so `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_HOST` are visible in every container’s environment alongside `XAI_API_KEY` and webhook keys (`deploy/compose.yml` `env_file` on each service). Least-privilege, per-service env files are tracked as roadmap follow-up ([#27](https://github.com/vihag/forge-legion/issues/27); `contracts/C10-contract.md` scope note).
+
+Trace payloads intentionally stay small: node spans send key lists and optional `evidence_count`, not raw Splunk rows (`tracing.py:state_input_summary`, 204–210; `graph.py:_wrap_node`, 357–359). The root trace carries `alert_id`; the `grok.assess` generation records the Grok prompt user message and parsed assessment JSON (`graph.py:grok_assess`, 137–140). See [Observability](../observability.md).
+
 ## Related
 
 Operational trust notes (metrics, CI, gaps): [Trust](../trust.md).
