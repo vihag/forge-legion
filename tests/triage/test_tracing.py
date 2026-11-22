@@ -617,6 +617,61 @@ def test_shutdown_bounded(caplog: pytest.LogCaptureFixture) -> None:
     assert len(calls) == 1
 
 
+def test_error_budget_resets_after_success() -> None:
+    sdk = FakeLangfuseSDK()
+    tracer = _tracer_from_sdk(sdk)
+    failing = RuntimeError("sdk_flap")
+
+    def fail_start(**_kwargs: object) -> object:
+        raise failing
+
+    original = sdk.start_as_current_observation
+    sdk.start_as_current_observation = fail_start  # type: ignore[method-assign]
+    for _ in range(4):
+        with tracer.trace_alert(ALERT_ID):
+            pass
+    assert tracer._budget.consecutive == 4
+    assert not tracer._budget.disabled
+
+    sdk.start_as_current_observation = original
+    with tracer.trace_alert(ALERT_ID):
+        pass
+    assert tracer._budget.consecutive == 0
+
+    sdk.start_as_current_observation = fail_start  # type: ignore[method-assign]
+    for _ in range(4):
+        with tracer.trace_alert(ALERT_ID):
+            pass
+    assert not tracer._budget.disabled
+
+    with tracer.trace_alert(ALERT_ID):
+        pass
+    assert tracer._budget.disabled
+
+
+def test_propagate_metadata_and_tags_truncated() -> None:
+    sdk = FakeLangfuseSDK()
+    tracer = _tracer_from_sdk(sdk)
+    long = "x" * 250
+    tracer.finalize(
+        route="a" * 250,
+        outcome="triaged",
+        metadata={
+            "case_id": long,
+            "rule": long,
+            "model_requested": "",
+            "model_returned": "",
+            "response_id": "",
+            "request_id": "",
+        },
+        gate_label="pass",
+        assessment_confidence=None,
+    )
+    prop = sdk.propagates[-1]
+    assert len(prop["metadata"]["case_id"]) == 200
+    assert len(prop["tags"][0]) == 200
+
+
 def test_tracing_secrets_never_logged(
     caplog: pytest.LogCaptureFixture,
     capsys: pytest.CaptureFixture[str],

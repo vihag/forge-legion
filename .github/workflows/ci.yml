@@ -60,6 +60,10 @@ jobs:
           eval "$(grep -v '^#' .env.example | grep '=' | sed 's/^/export /')"
           set +a
           pytest
+      - name: Langfuse SDK compat (C10c)
+        run: |
+          pip install -e ".[tracing]"
+          pytest tests/triage/test_tracing_sdk_compat.py
 
   openapi:
     runs-on: ubuntu-latest

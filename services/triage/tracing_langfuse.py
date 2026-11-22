@@ -35,6 +35,10 @@ class _ErrorBudget:
     last_log_s: float = 0.0
 
 
+def _note_success(budget: _ErrorBudget) -> None:
+    budget.consecutive = 0
+
+
 def _rate_limited_error(exc: BaseException, budget: _ErrorBudget) -> None:
     budget.consecutive += 1
     if budget.consecutive >= 5 and not budget.disabled:
@@ -58,17 +62,47 @@ def _import_langfuse() -> Any:
     return langfuse
 
 
+def _coerce_propagate_metadata(metadata: Mapping[str, Any]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for key, value in metadata.items():
+        text = "" if value is None else str(value)
+        if len(text) > 200:
+            text = text[:200]
+        out[str(key)] = text
+    return out
+
+
+def _coerce_propagate_tags(tags: list[str]) -> list[str]:
+    out: list[str] = []
+    for tag in tags:
+        text = str(tag)
+        if len(text) > 200:
+            text = text[:200]
+        out.append(text)
+    return out
+
+
 @dataclass
 class LangfuseTracer:
     _client: Any
+    _propagate_attributes: Any
     _budget: _ErrorBudget = field(default_factory=_ErrorBudget)
     _flush_timeout_s: float = 5.0
     _active_generation: Any | None = None
 
     @classmethod
-    def from_sdk(cls, sdk: Any, *, flush_timeout_s: float = 5.0) -> LangfuseTracer:
+    def from_sdk(
+        cls,
+        sdk: Any,
+        *,
+        propagate_attributes: Any | None = None,
+        flush_timeout_s: float = 5.0,
+    ) -> LangfuseTracer:
+        prop = propagate_attributes
+        if prop is None:
+            prop = _import_langfuse().propagate_attributes
         logger.info("langfuse tracing: enabled")
-        return cls(_client=sdk, _flush_timeout_s=flush_timeout_s)
+        return cls(_client=sdk, _propagate_attributes=prop, _flush_timeout_s=flush_timeout_s)
 
     @contextmanager
     def trace_alert(self, alert_id: str) -> Iterator[None]:
@@ -86,16 +120,19 @@ class LangfuseTracer:
             yield
             return
         try:
-            prop_cm = self._client.propagate_attributes(
+            prop_cm = self._propagate_attributes(
                 trace_name="triage",
-                metadata={"alert_id": alert_id},
+                metadata=_coerce_propagate_metadata({"alert_id": alert_id}),
             )
         except Exception as exc:
             _rate_limited_error(exc, self._budget)
             yield
             return
         with obs_cm, prop_cm:
-            yield
+            try:
+                yield
+            finally:
+                _note_success(self._budget)
 
     @contextmanager
     def node_span(self, name: str, *, input_summary: dict[str, Any]) -> Iterator[_NodeSpanContext]:
@@ -118,8 +155,10 @@ class LangfuseTracer:
                 yield holder
                 if holder.output is not None:
                     span.update(output=holder.output)
+                _note_success(self._budget)
             except Exception as exc:
                 span.update(level="ERROR", status_message=type(exc).__name__)
+                _note_success(self._budget)
                 raise
 
     @contextmanager
@@ -149,12 +188,14 @@ class LangfuseTracer:
                 yield gen
             finally:
                 self._active_generation = None
+                _note_success(self._budget)
 
     def generation_error(self, status_message: str) -> None:
         if self._budget.disabled or self._active_generation is None:
             return
         try:
             self._active_generation.update(level="ERROR", status_message=status_message)
+            _note_success(self._budget)
         except Exception as exc:
             _rate_limited_error(exc, self._budget)
 
@@ -170,9 +211,9 @@ class LangfuseTracer:
         if self._budget.disabled:
             return
         try:
-            with self._client.propagate_attributes(
-                tags=[f"route:{route}", f"outcome:{outcome}"],
-                metadata=metadata,
+            with self._propagate_attributes(
+                tags=_coerce_propagate_tags([f"route:{route}", f"outcome:{outcome}"]),
+                metadata=_coerce_propagate_metadata(metadata),
             ):
                 with self._client.start_as_current_observation(
                     name="finalize",
@@ -196,6 +237,7 @@ class LangfuseTracer:
                     data_type="BOOLEAN",
                     comment=comment,
                 )
+            _note_success(self._budget)
         except Exception as exc:
             _rate_limited_error(exc, self._budget)
 
@@ -226,4 +268,8 @@ def build_langfuse_tracer(env: Mapping[str, str]) -> LangfuseTracer:
     from services.triage.tracing import _flush_timeout
 
     logger.info("langfuse tracing: enabled")
-    return LangfuseTracer(_client=client, _flush_timeout_s=_flush_timeout(env))
+    return LangfuseTracer(
+        _client=client,
+        _propagate_attributes=lf.propagate_attributes,
+        _flush_timeout_s=_flush_timeout(env),
+    )

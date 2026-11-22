@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
@@ -64,17 +65,6 @@ class FakeLangfuseSDK:
 
         return _cm()
 
-    def propagate_attributes(self, **kwargs: Any) -> Any:
-        if self._fail:
-            raise RuntimeError("sdk_down")
-
-        @contextmanager
-        def _cm() -> Any:
-            self.propagates.append(dict(kwargs))
-            yield self
-
-        return _cm()
-
     def score_current_trace(self, **kwargs: Any) -> None:
         if self._fail:
             raise RuntimeError("sdk_down")
@@ -84,3 +74,16 @@ class FakeLangfuseSDK:
         self.shutdown_calls += 1
         if self._fail:
             raise RuntimeError("sdk_down")
+
+
+def make_propagate_attributes(sdk: FakeLangfuseSDK) -> Callable[..., Any]:
+    """Module-level stand-in for ``langfuse.propagate_attributes`` (per fake client)."""
+
+    @contextmanager
+    def propagate_attributes(**kwargs: Any) -> Iterator[FakeLangfuseSDK]:
+        if sdk._fail:
+            raise RuntimeError("sdk_down")
+        sdk.propagates.append(dict(kwargs))
+        yield sdk
+
+    return propagate_attributes

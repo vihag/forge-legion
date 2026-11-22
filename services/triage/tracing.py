@@ -173,11 +173,13 @@ def build_tracer(
         return _NOOP
     try:
         if sdk is not None:
+            fake_sdk = importlib.import_module("tests.triage.test_tracing_sdk")
             adapter = importlib.import_module("services.triage.tracing_langfuse")
             return cast(
                 Tracer,
                 adapter.LangfuseTracer.from_sdk(
                     sdk,
+                    propagate_attributes=fake_sdk.make_propagate_attributes(sdk),
                     flush_timeout_s=_flush_timeout(mapping),
                 ),
             )
