@@ -26,6 +26,7 @@ from services.triage.clients import (
 )
 from services.triage.grok import GrokCallError, GrokClient, GrokResponse, parse_assessment
 from services.triage.prompt import build_user_message
+from services.triage.prompt_source import ResolvedSystemPrompt, code_fallback_prompt
 from services.triage.routing import RoutingConfig, decide
 from services.triage.tracing import (
     NoopTracer,
@@ -67,6 +68,7 @@ class TriageDeps:
     routing: RoutingConfig
     model_requested: str
     tracer: Tracer = field(default_factory=NoopTracer)
+    system_prompt: ResolvedSystemPrompt = field(default_factory=code_fallback_prompt)
 
 
 def build_graph(deps: TriageDeps) -> StateGraph[TriageState, None, TriageState, TriageState]:
@@ -134,9 +136,13 @@ def build_graph(deps: TriageDeps) -> StateGraph[TriageState, None, TriageState, 
         if bind_alert is not None:
             bind_alert(alert)
         model_name = state.get("model_requested") or deps.model_requested
+        prompt_client = (
+            deps.system_prompt.client if deps.system_prompt.source == "langfuse" else None
+        )
         with deps.tracer.generation_span(
             model=model_name,
             input_payload={"user_message": user_message},
+            prompt_client=prompt_client,
         ) as generation:
             try:
                 raw = deps.grok_client.assess(

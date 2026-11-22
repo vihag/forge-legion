@@ -10,7 +10,10 @@ import time
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Literal, Protocol, cast
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
+
+if TYPE_CHECKING:
+    from services.triage.prompt_source import ResolvedSystemPrompt
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +68,7 @@ class Tracer(Protocol):
         *,
         model: str,
         input_payload: dict[str, Any],
+        prompt_client: Any | None = None,
     ) -> Iterator[ObservationHandle]: ...
 
     def finalize(
@@ -80,6 +84,8 @@ class Tracer(Protocol):
     def shutdown(self, *, timeout_s: float | None = None) -> None: ...
 
     def generation_error(self, status_message: str) -> None: ...
+
+    def managed_system_prompt(self) -> ResolvedSystemPrompt: ...
 
 
 class _NoopObservation:
@@ -110,8 +116,9 @@ class NoopTracer:
         *,
         model: str,
         input_payload: dict[str, Any],
+        prompt_client: Any | None = None,
     ) -> Iterator[ObservationHandle]:
-        del model, input_payload
+        del model, input_payload, prompt_client
         yield _NoopObservation()
 
     def finalize(
@@ -130,6 +137,11 @@ class NoopTracer:
 
     def generation_error(self, status_message: str) -> None:
         del status_message
+
+    def managed_system_prompt(self) -> ResolvedSystemPrompt:
+        from services.triage.prompt_source import code_fallback_prompt
+
+        return code_fallback_prompt()
 
 
 _NOOP = NoopTracer()
@@ -283,6 +295,11 @@ def triage_with_trace(
                     break
         meta = finalize_metadata(result, case=case)
         meta["request_id"] = request_id
+        resolved = deps.system_prompt
+        meta["prompt_source"] = resolved.source
+        meta["prompt_version"] = (
+            str(resolved.version) if resolved.version is not None else "none"
+        )
         allowed_routes = ("autonomous", "collaborative", "review")
         route_tag = route_value if route_value in allowed_routes else "none"
         gate_label = gate if gate != "—" else "pass"

@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
+from services.triage.prompt_source import ResolvedSystemPrompt, code_fallback_prompt
 from services.triage.tracing import TraceOutcome, _env_get, _NodeSpanContext
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,7 @@ class LangfuseTracer:
     _budget: _ErrorBudget = field(default_factory=_ErrorBudget)
     _flush_timeout_s: float = 5.0
     _active_generation: Any | None = None
+    _managed_prompt: ResolvedSystemPrompt | None = None
 
     @classmethod
     def from_sdk(
@@ -164,23 +166,56 @@ class LangfuseTracer:
                 _note_success(self._budget)
                 raise
 
+    def managed_system_prompt(self) -> ResolvedSystemPrompt:
+        if self._managed_prompt is not None:
+            return self._managed_prompt
+        if self._budget.disabled:
+            self._managed_prompt = code_fallback_prompt()
+            return self._managed_prompt
+        try:
+            client = self._client.get_prompt(
+                name="triage-system",
+                label="production",
+                type="text",
+                fetch_timeout_seconds=2,
+                max_retries=1,
+                cache_ttl_seconds=300,
+            )
+            text = client.prompt
+            if not isinstance(text, str) or not text or getattr(client, "is_fallback", False):
+                raise ValueError("prompt unavailable")
+            self._managed_prompt = ResolvedSystemPrompt(
+                text=text,
+                source="langfuse",
+                version=getattr(client, "version", None),
+                client=client,
+            )
+        except Exception as exc:
+            logger.warning("triage system prompt: %s", type(exc).__name__)
+            self._managed_prompt = code_fallback_prompt()
+        return self._managed_prompt
+
     @contextmanager
     def generation_span(
         self,
         *,
         model: str,
         input_payload: dict[str, Any],
+        prompt_client: Any | None = None,
     ) -> Iterator[Any]:
         if self._budget.disabled:
             yield _NOOP_OBSERVATION
             return
+        gen_kwargs: dict[str, Any] = {
+            "name": "grok.assess",
+            "as_type": "generation",
+            "model": model,
+            "input": input_payload,
+        }
+        if prompt_client is not None:
+            gen_kwargs["prompt"] = prompt_client
         try:
-            obs_cm = self._client.start_as_current_observation(
-                name="grok.assess",
-                as_type="generation",
-                model=model,
-                input=input_payload,
-            )
+            obs_cm = self._client.start_as_current_observation(**gen_kwargs)
         except Exception as exc:
             _rate_limited_error(exc, self._budget)
             yield _NOOP_OBSERVATION
