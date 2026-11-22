@@ -12,7 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Console unit tests
-        run: node --test tests/console/queue.test.mjs
+        working-directory: tests/console
+        run: node --test
 
   ruff:
     runs-on: ubuntu-latest
