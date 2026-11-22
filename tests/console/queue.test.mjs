@@ -155,7 +155,7 @@ describe("approvalState", () => {
   it("shows waiting when disposition proposed", () => {
     assert.equal(
       queue.approvalState({ status: "DISPOSITION_PROPOSED", decision: null }),
-      "Waiting for analyst approval",
+      "Waiting for analyst approval in Grok Bot",
     );
     assert.match(
       queue.approvalState({
