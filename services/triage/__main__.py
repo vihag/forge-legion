@@ -2,18 +2,20 @@
 
 import argparse
 import json
+import os
 import sys
 from typing import Never
 
 from services.triage.clients import AlertNotFound, CaseApiClient, SplunkClient
 from services.triage.config import ConfigError, TriageSettings, load_settings, require_api_key
-from services.triage.graph import TriageDeps, run_triage
+from services.triage.graph import TriageDeps
 from services.triage.grok import (
     FixtureGrokClient,
     GrokClient,
     HttpGrokClient,
 )
-from services.triage.worker import run_worker
+from services.triage.tracing import build_tracer, shutdown_tracer_once, triage_with_trace
+from services.triage.worker import handle_triage_result, run_worker
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,21 +61,42 @@ def _run_alert(alert_id: str) -> int:
     grok_client = grok_or_error
     case_client = CaseApiClient(settings.case_api_url)
     splunk_client = SplunkClient(settings.mock_splunk_url)
+    tracer = build_tracer(os.environ)
     deps = TriageDeps(
         case_client=case_client,
         splunk_client=splunk_client,
         grok_client=grok_client,
         routing=settings.routing_config,
         model_requested=settings.xai_model,
+        tracer=tracer,
     )
     exit_code = 0
     result = None
     try:
-        result = run_triage(deps, alert_id)
+
+        def _handle(res):  # type: ignore[no-untyped-def]
+            return handle_triage_result(
+                webhook=None,
+                case_client=case_client,
+                result=res,
+            )
+
+        result, _, _ = triage_with_trace(
+            tracer=tracer,
+            deps=deps,
+            alert_id=alert_id,
+            handle_result=_handle,
+        )[:3]
     except AlertNotFound as exc:
         print(str(exc), file=sys.stderr)
         exit_code = 1
     finally:
+        flush_raw = os.environ.get("LANGFUSE_FLUSH_TIMEOUT_S", "5").strip() or "5"
+        try:
+            flush_timeout = float(flush_raw)
+        except ValueError:
+            flush_timeout = 5.0
+        shutdown_tracer_once(tracer, timeout_s=flush_timeout)
         case_client.close()
         splunk_client.close()
         grok_client.close()

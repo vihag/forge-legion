@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any, Literal, TypedDict, cast
 
 from langgraph.graph import END, StateGraph
@@ -26,6 +27,12 @@ from services.triage.clients import (
 from services.triage.grok import GrokCallError, GrokClient, GrokResponse, parse_assessment
 from services.triage.prompt import build_user_message
 from services.triage.routing import RoutingConfig, decide
+from services.triage.tracing import (
+    NoopTracer,
+    Tracer,
+    state_input_summary,
+    state_summary_keys,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +66,7 @@ class TriageDeps:
     grok_client: GrokClient
     routing: RoutingConfig
     model_requested: str
+    tracer: Tracer = field(default_factory=NoopTracer)
 
 
 def build_graph(deps: TriageDeps) -> StateGraph[TriageState, None, TriageState, TriageState]:
@@ -125,24 +133,67 @@ def build_graph(deps: TriageDeps) -> StateGraph[TriageState, None, TriageState, 
         bind_alert = getattr(deps.grok_client, "bind_alert", None)
         if bind_alert is not None:
             bind_alert(alert)
-        try:
-            raw = deps.grok_client.assess(
-                user_message,
-                evidence_ids=set(state.get("evidence_map", {})),
-            )
-        except GrokCallError as exc:
-            reason: ReviewReason = (
-                "invalid_model_output" if exc.is_invalid_output else "model_call_failed"
-            )
-            return {
-                "error_reason": reason,
-                "error_detail": exc.detail or str(exc),
-            }
-        except Exception as exc:  # noqa: BLE001 - transport failures become review
-            return {
-                "error_reason": "model_call_failed",
-                "error_detail": str(exc)[:2000],
-            }
+        model_name = state.get("model_requested") or deps.model_requested
+        with deps.tracer.generation_span(
+            model=model_name,
+            input_payload={"user_message": user_message},
+        ) as generation:
+            try:
+                raw = deps.grok_client.assess(
+                    user_message,
+                    evidence_ids=set(state.get("evidence_map", {})),
+                )
+            except GrokCallError as exc:
+                reason: ReviewReason = (
+                    "invalid_model_output" if exc.is_invalid_output else "model_call_failed"
+                )
+                generation.update(
+                    level="ERROR",
+                    status_message=reason,
+                )
+                return {
+                    "error_reason": reason,
+                    "error_detail": exc.detail or str(exc),
+                }
+            except Exception as exc:  # noqa: BLE001 - transport failures become review
+                generation.update(level="ERROR", status_message="model_call_failed")
+                return {
+                    "error_reason": "model_call_failed",
+                    "error_detail": str(exc)[:2000],
+                }
+            model_used = raw.model_returned or model_name
+            generation.update(model=model_used)
+            usage = raw.usage or {}
+            usage_details: dict[str, int] = {}
+            for src, dest in (
+                ("prompt_tokens", "input"),
+                ("completion_tokens", "output"),
+                ("total_tokens", "total"),
+            ):
+                val = usage.get(src)
+                if isinstance(val, int):
+                    usage_details[dest] = val
+            meta: dict[str, str] = {"response_id": raw.response_id}
+            if raw.request_id:
+                meta["request_id"] = raw.request_id
+            try:
+                assessment = parse_assessment(raw, evidence_ids=set(state.get("evidence_map", {})))
+                generation.update(
+                    output=assessment.model_dump(mode="json"),
+                    usage_details=usage_details or None,
+                    metadata=meta,
+                )
+            except GrokCallError as parse_exc:
+                if parse_exc.is_invalid_output:
+                    status = "invalid_model_output"
+                else:
+                    status = "model_call_failed"
+                generation.update(
+                    level="ERROR",
+                    status_message=status,
+                    usage_details=usage_details or None,
+                    metadata=meta,
+                )
         return {
             "grok_raw": {
                 "response_id": raw.response_id,
@@ -297,16 +348,32 @@ def build_graph(deps: TriageDeps) -> StateGraph[TriageState, None, TriageState, 
         )
         return {"outcome": "needs_review"}
 
-    graph.add_node("fetch_alert", fetch_alert)
-    graph.add_node("ingest_case", ingest_case)
-    graph.add_node("fetch_evidence", fetch_evidence)
-    graph.add_node("attach_evidence", attach_evidence)
-    graph.add_node("deterministic_checks", deterministic_checks)
-    graph.add_node("grok_assess", grok_assess)
-    graph.add_node("validate", validate)
-    graph.add_node("route", route)
-    graph.add_node("persist_triage", persist_triage)
-    graph.add_node("flag_review", flag_review)
+    def _wrap_node(
+        name: str,
+        fn: Callable[[TriageState], TriageState],
+    ) -> Callable[[TriageState], TriageState]:
+        def wrapped(state: TriageState) -> TriageState:
+            state_dict = cast(dict[str, Any], state)
+            with deps.tracer.node_span(name, input_summary=state_input_summary(state_dict)) as ctx:
+                delta = fn(state)
+                ctx.output = state_summary_keys(cast(dict[str, Any], delta))
+                return delta
+
+        return wrapped
+
+    graph.add_node("fetch_alert", cast(Any, _wrap_node("fetch_alert", fetch_alert)))
+    graph.add_node("ingest_case", cast(Any, _wrap_node("ingest_case", ingest_case)))
+    graph.add_node("fetch_evidence", cast(Any, _wrap_node("fetch_evidence", fetch_evidence)))
+    graph.add_node("attach_evidence", cast(Any, _wrap_node("attach_evidence", attach_evidence)))
+    graph.add_node(
+        "deterministic_checks",
+        cast(Any, _wrap_node("deterministic_checks", deterministic_checks)),
+    )
+    graph.add_node("grok_assess", cast(Any, _wrap_node("grok_assess", grok_assess)))
+    graph.add_node("validate", cast(Any, _wrap_node("validate", validate)))
+    graph.add_node("route", cast(Any, _wrap_node("route", route)))
+    graph.add_node("persist_triage", cast(Any, _wrap_node("persist_triage", persist_triage)))
+    graph.add_node("flag_review", cast(Any, _wrap_node("flag_review", flag_review)))
 
     graph.set_entry_point("fetch_alert")
     graph.add_edge("fetch_alert", "ingest_case")
