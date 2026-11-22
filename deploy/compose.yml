@@ -109,6 +109,8 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+      args:
+        PIP_EXTRAS: tracing
     env_file:
       - ../${ENV_FILE:-.env.local}
     command:
@@ -129,6 +131,8 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+      args:
+        PIP_EXTRAS: tracing
     env_file:
       - ../${ENV_FILE:-.env.local}
     command:

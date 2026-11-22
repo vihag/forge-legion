@@ -12,13 +12,14 @@ from contracts.models import Case, CaseStatus
 from contracts.triage import TriageResult
 from services.triage.clients import AlertNotFound, CaseApiClient, SplunkClient
 from services.triage.config import TriageSettings, load_settings
-from services.triage.graph import TriageDeps, run_triage
+from services.triage.graph import TriageDeps
 from services.triage.grok import (
     FixtureGrokClient,
     GrokClient,
     HttpGrokClient,
     StreamFixtureGrokClient,
 )
+from services.triage.tracing import build_tracer, shutdown_tracer_once, triage_with_trace
 from services.triage.webhook import RoutineWebhook, WebhookPayload
 
 logger = logging.getLogger(__name__)
@@ -118,12 +119,14 @@ def run_worker() -> int:
     grok_client = _resolve_grok_client(settings)
     case_client = CaseApiClient(settings.case_api_url)
     splunk_client = SplunkClient(settings.mock_splunk_url)
+    tracer = build_tracer(os.environ)
     deps = TriageDeps(
         case_client=case_client,
         splunk_client=splunk_client,
         grok_client=grok_client,
         routing=settings.routing_config,
         model_requested=settings.xai_model,
+        tracer=tracer,
     )
     webhook = RoutineWebhook.from_env()
     if webhook is not None:
@@ -134,11 +137,19 @@ def run_worker() -> int:
             page = splunk_client.list_alerts(after_seq=after_seq, limit=100)
             for alert in page.items:
                 try:
-                    result = run_triage(deps, alert.alert_id)
-                    route, gate, webhook_state = handle_triage_result(
-                        webhook=webhook,
-                        case_client=case_client,
-                        result=result,
+
+                    def _handle(result: TriageResult) -> tuple[str, str, WebhookState]:
+                        return handle_triage_result(
+                            webhook=webhook,
+                            case_client=case_client,
+                            result=result,
+                        )
+
+                    result, route, gate, webhook_state = triage_with_trace(
+                        tracer=tracer,
+                        deps=deps,
+                        alert_id=alert.alert_id,
+                        handle_result=_handle,
                     )
                     logger.info(
                         "alert_id=%s case_id=%s route=%s gate=%s webhook=%s",
@@ -157,6 +168,12 @@ def run_worker() -> int:
     finally:
         if webhook is not None:
             webhook.shutdown()
+        flush_raw = os.environ.get("LANGFUSE_FLUSH_TIMEOUT_S", "5").strip() or "5"
+        try:
+            flush_timeout = float(flush_raw)
+        except ValueError:
+            flush_timeout = 5.0
+        shutdown_tracer_once(tracer, timeout_s=flush_timeout)
         case_client.close()
         splunk_client.close()
         grok_client.close()

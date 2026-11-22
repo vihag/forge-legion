@@ -26,6 +26,7 @@ nav:
   - Overview: index.md
   - Case API: case-api.md
   - Triage: triage.md
+  - Observability: observability.md
   - Routing policy: routing.md
   - MCP: mcp.md
   - LEGION bots: bots.md
