@@ -115,7 +115,7 @@ scenarios-check:
 	$(PYTHON) -m services.mock_splunk.scenarios check --world tests/fixtures/scenarios/world.yaml --dir tests/fixtures/scenarios
 
 langfuse-prompt-push:
-	$(PYTHON) scripts/langfuse_prompt_push.py
+	$(COMPOSE) exec -T triage_worker python scripts/langfuse_prompt_push.py
 
 webhook-check: _check_env
 	@set -a && . ./$(ENV_FILE) && set +a; \

@@ -46,8 +46,8 @@ The `tracing` extra (`langfuse` on PyPI) is installed only on the `triage_worker
 
 The triage system message can be stored in Langfuse as a **text** prompt named `triage-system`. The production label selects the version the worker uses at startup.
 
-**Push from the repo:** run `make langfuse-prompt-push` with `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_HOST` set (names only in script output). The command seeds from `services/triage/prompt.py`. Running it twice should print `pushed vN` then `unchanged vN` when the text already matches.
+**Push from the repo:** run `make langfuse-prompt-push`. The target runs inside the `triage_worker` container, so the stack must be up (`make up`) with `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_HOST` set in `.env.local` (names only in script output). The command seeds from `services/triage/prompt.py`. Running it twice should print `pushed vN` then `unchanged vN` when the text already matches.
 
-**Roll back:** in the Langfuse UI, move the `production` label to an older `triage-system` version, then restart the triage worker. The worker caches the resolved prompt for five minutes (`cache_ttl_seconds=300`); after that TTL, or immediately after restart, it picks up the relabelled version.
+**Roll back:** in the Langfuse UI, move the `production` label to an older `triage-system` version, then restart the triage worker (`docker compose --env-file .env.local -f deploy/compose.yml restart triage_worker`). The worker resolves the prompt once at startup and keeps it for the life of the process; restart the triage worker to pick up the relabelled version.
 
 **Fallback:** when tracing is off, or Langfuse is unreachable, the prompt is empty, or Langfuse returns a fallback client, triage uses the in-repo `SYSTEM_PROMPT` (`prompt_source` metadata `code`, `prompt_version` `none`). One warning is logged per process (reason class only). Triage never fails because of prompt management.

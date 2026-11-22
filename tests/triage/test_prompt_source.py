@@ -16,7 +16,7 @@ import httpx
 import pytest
 
 from services.triage.graph import TriageDeps, run_triage
-from services.triage.grok import HttpGrokClient
+from services.triage.grok import GrokCallError, HttpGrokClient
 from services.triage.prompt import SYSTEM_PROMPT
 from services.triage.prompt_source import resolve_system_prompt
 from services.triage.tracing import build_tracer, noop_tracer, triage_with_trace
@@ -259,3 +259,33 @@ def test_push_script_missing_env_exits_nonzero(
     assert "LANGFUSE_PUBLIC_KEY: empty" in err
     assert "LANGFUSE_SECRET_KEY: empty" in err
     assert "LANGFUSE_HOST: empty" in err
+
+def test_worker_grok_client_sends_resolved_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
+    import dataclasses
+    import functools
+    import json
+
+    from services.triage import worker
+    from services.triage.config import load_settings
+
+    remote = "REMOTE triage-system prompt from Langfuse"
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(json.loads(request.content.decode()))
+        return httpx.Response(500)
+
+    monkeypatch.setattr(
+        worker,
+        "HttpGrokClient",
+        functools.partial(HttpGrokClient, transport=httpx.MockTransport(handler)),
+    )
+    settings = dataclasses.replace(load_settings(), xai_api_key="test-key", grok_client="http")
+    client = worker._resolve_grok_client(settings, system_prompt_text=remote)
+    try:
+        with pytest.raises(GrokCallError):
+            client.assess("{}", evidence_ids=set())
+    finally:
+        client.close()
+    assert seen["messages"][0]["content"] == remote
+    assert remote != SYSTEM_PROMPT

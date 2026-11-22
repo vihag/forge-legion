@@ -96,6 +96,17 @@ EXPECTED_CALLS: list[tuple[str, TargetKind, dict[str, Any]]] = [
             "comment": "rule",
         },
     ),
+    (
+        "create_prompt",
+        "client",
+        {
+            "name": "triage-system",
+            "prompt": "x",
+            "labels": ["production"],
+            "type": "text",
+            "commit_message": "x",
+        },
+    ),
     ("shutdown", "client", {}),
 ]
 
