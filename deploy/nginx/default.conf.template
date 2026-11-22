@@ -19,6 +19,11 @@ server {
         return 302 /console/;
     }
 
+    location = /console/config.js {
+        default_type application/javascript;
+        return 200 'window.LEGION_CONFIG = {"grokbotCenturionLinkTemplate":"${GROKBOT_CENTURION_LINK_TEMPLATE}"};';
+    }
+
     location /console/ {
         alias /app/console/;
         index index.html;

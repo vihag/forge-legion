@@ -20,7 +20,12 @@
         <span class="live" id="live-indicator"><span class="live-dot" aria-hidden="true"></span><span id="last-updated">Connecting…</span></span>
       </div>
     </header>
+  <nav class="tab-bar" aria-label="Console sections">
+    <button type="button" class="tab" id="tab-overview" data-tab="overview" aria-pressed="true">Overview</button>
+    <button type="button" class="tab" id="tab-queue" data-tab="queue" aria-pressed="false">Analyst queue</button>
+  </nav>
     <main>
+      <div id="panel-overview" class="tab-panel" data-tab-panel="overview">
       <section class="kpi-grid" aria-label="Key metrics">
         <article class="card kpi" id="tile-total">
           <h2>Total cases</h2>
@@ -146,10 +151,75 @@
           </ul>
         </article>
       </section>
+      </div>
+      <div id="panel-queue" class="tab-panel hidden" data-tab-panel="queue" aria-label="Analyst queue">
+        <p id="queue-centurion-banner" class="banner queue-banner">Approvals happen in Grok Bot with CENTURION</p>
+        <section class="queue-layout">
+          <article class="card panel queue-list-panel">
+            <div class="panel-head">
+              <h2>Open cases</h2>
+              <p class="explain">Read-only queue sorted by analyst attention, severity, and age.</p>
+            </div>
+            <div class="queue-filter" id="queue-filter" role="radiogroup" aria-label="Filter open cases">
+              <label class="queue-radio"><input type="radio" name="queue-filter" value="all" checked /> All open</label>
+              <label class="queue-radio"><input type="radio" name="queue-filter" value="approvals" /> Approvals</label>
+              <label class="queue-radio"><input type="radio" name="queue-filter" value="needs_investigating" /> Needs review or investigating</label>
+            </div>
+            <table id="queue-table" class="data-table queue-table">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Severity</th>
+                  <th>Rule</th>
+                  <th>Age</th>
+                  <th>Alert</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </article>
+          <article class="card panel queue-detail-panel" id="queue-detail" aria-live="polite">
+            <div class="panel-head">
+              <h2 id="queue-detail-title">Case detail</h2>
+              <p class="explain" id="queue-detail-sub">Select a case to load its view.</p>
+            </div>
+            <div id="queue-detail-body" class="queue-detail-body hidden">
+              <section class="detail-block">
+                <h3>Summary</h3>
+                <p id="queue-detail-summary" class="detail-text"></p>
+              </section>
+              <section class="detail-block">
+                <h3>CENTURION plan and notes</h3>
+                <ul id="queue-centurion-notes" class="detail-list"></ul>
+              </section>
+              <section class="detail-block">
+                <h3>Findings</h3>
+                <ul id="queue-findings" class="detail-list"></ul>
+              </section>
+              <section class="detail-block">
+                <h3>Proposed disposition</h3>
+                <p id="queue-disposition" class="detail-text"></p>
+                <p id="queue-approval-state" class="detail-text approval-state"></p>
+              </section>
+              <section class="detail-block">
+                <h3>Evidence</h3>
+                <p id="queue-evidence-count" class="detail-text"></p>
+              </section>
+              <div class="queue-actions">
+                <a id="queue-grok-link" class="btn primary" href="#" target="_blank" rel="noopener noreferrer">Open in Grok Bot</a>
+                <button type="button" class="btn" id="queue-copy-id">Copy case id</button>
+              </div>
+              <p id="queue-copy-status" class="fineprint hidden" aria-live="polite"></p>
+            </div>
+          </article>
+        </section>
+      </div>
     </main>
     <footer>
-      <p>Refreshes every 5 seconds</p>
+      <p id="footer-refresh">Refreshes every 5 seconds</p>
     </footer>
+    <script src="/console/config.js"></script>
+    <script src="queue.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
