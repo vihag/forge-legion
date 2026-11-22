@@ -668,7 +668,7 @@ def test_propagate_metadata_and_tags_truncated() -> None:
         assessment_confidence=None,
     )
     prop = sdk.propagates[-1]
-    assert len(prop["metadata"]["case_id"]) == 200
+    assert len(json.dumps(prop["metadata"]["case_id"], ensure_ascii=False)) <= 200
     assert len(prop["tags"][0]) == 200
 
 

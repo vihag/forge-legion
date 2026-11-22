@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
@@ -68,6 +69,8 @@ def _coerce_propagate_metadata(metadata: Mapping[str, Any]) -> dict[str, str]:
         text = "" if value is None else str(value)
         if len(text) > 200:
             text = text[:200]
+        while len(json.dumps(text, ensure_ascii=False)) > 200:
+            text = text[:-1]
         out[str(key)] = text
     return out
 
