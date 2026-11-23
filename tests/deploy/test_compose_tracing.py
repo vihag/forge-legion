@@ -25,7 +25,7 @@ def test_compose_tracing_scope() -> None:
         if line.startswith("LANGFUSE_") and not line.startswith("# "):
             raise AssertionError(f"uncommented LANGFUSE line: {line}")
     names = [
-        "# LANGFUSE_ENABLED=0",
+        "# LANGFUSE_ENABLED=",
         "# LANGFUSE_PUBLIC_KEY=",
         "# LANGFUSE_SECRET_KEY=",
         "# LANGFUSE_HOST=",
@@ -33,3 +33,6 @@ def test_compose_tracing_scope() -> None:
     ]
     for name in names:
         assert name in example
+    assert "tracing is on when LANGFUSE_PUBLIC_KEY" in example
+    assert "Set LANGFUSE_ENABLED=0 to disable" in example
+    assert "# LANGFUSE_ENABLED=0" not in example

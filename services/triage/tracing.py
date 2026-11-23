@@ -1,4 +1,4 @@
-"""Opt-in Langfuse tracing for triage (no langfuse import in this module)."""
+"""Langfuse tracing for triage (default-on when keys are set; no langfuse import here)."""
 
 from __future__ import annotations
 
@@ -27,15 +27,23 @@ def _env_get(env: Mapping[str, str], key: str) -> str:
     return env.get(key, os.environ.get(key, "")).strip()
 
 
+_FALSY_ENABLED = frozenset({"0", "false", "no", "off"})
+
+
+def _explicitly_disabled(enabled: str) -> bool:
+    return enabled.lower() in _FALSY_ENABLED
+
+
 def _gating_disabled_reason(env: Mapping[str, str]) -> str | None:
     enabled = _env_get(env, "LANGFUSE_ENABLED")
     pk = _env_get(env, "LANGFUSE_PUBLIC_KEY")
     sk = _env_get(env, "LANGFUSE_SECRET_KEY")
     host = _env_get(env, "LANGFUSE_HOST")
-    if enabled == "1" and pk and sk and host:
+    disabled = _explicitly_disabled(enabled)
+    if not disabled and pk and sk and host:
         return None
     return (
-        f"enabled={'1' if enabled == '1' else '0'}"
+        f"enabled={'0' if disabled else '1'}"
         f"|public_key={'set' if pk else 'empty'}"
         f"|secret_key={'set' if sk else 'empty'}"
         f"|host={'set' if host else 'empty'}"

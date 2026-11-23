@@ -75,7 +75,7 @@ sequenceDiagram
     H->>API: decision via /mcp-analyst (APPROVED or REJECTED)
     API->>SOAR: submit, only if APPROVED, once (SUBMITTED)
   end
-  opt when tracing enabled (LANGFUSE_ENABLED=1 and keys set)
+  opt when tracing enabled (keys set, unless LANGFUSE_ENABLED is falsy)
     LG-.->>LF: root triage trace, node spans, grok.assess, finalize
   end
 ```
@@ -104,4 +104,4 @@ The deep link template is supplied at runtime as `GROKBOT_CENTURION_LINK_TEMPLAT
 
 Public exposure (optional ngrok profile) serves **MCP only** on the public gateway port; Case, Splunk, SOAR, and console stay on the local gateway.
 
-Optional Langfuse tracing for the triage worker is documented in [Observability](observability.md) (`LANGFUSE_ENABLED=1` plus `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_HOST` in `.env.local`).
+Optional Langfuse tracing for the triage worker is documented in [Observability](observability.md) (on by default when `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_HOST` are set in `.env.local`; set `LANGFUSE_ENABLED=0` to disable).

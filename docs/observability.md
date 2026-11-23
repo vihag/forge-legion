@@ -1,6 +1,6 @@
 # Observability (Langfuse)
 
-FORGE triage can emit optional traces to [Langfuse](https://langfuse.com) (Cloud or self-hosted ≥ v4.59.0). Tracing is **off by default** and never changes triage outcomes, case writes, routing, auto-resolve, or webhooks.
+FORGE triage can emit optional traces to [Langfuse](https://langfuse.com) (Cloud or self-hosted ≥ v4.59.0). Tracing is **on by default** when `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_HOST` are all set, and never changes triage outcomes, case writes, routing, auto-resolve, or webhooks. Set `LANGFUSE_ENABLED=0` (or `false`, `no`, or `off`) to disable it.
 
 ## What is traced
 
@@ -30,15 +30,14 @@ Skipped existing cases still get `triage` + `finalize` (no generation, no scores
 
 1. Ensure `.env.local` exists (`make env-merge` creates it and prints any newly added key names only).
 2. Set non-empty `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_HOST` in `.env.local` by hand.
-3. `make env-set KEY=LANGFUSE_ENABLED VALUE=1` (prints `LANGFUSE_ENABLED` only).
-4. `make up` to recreate containers.
+3. `make up` to recreate containers. Unset or empty `LANGFUSE_ENABLED` means on once the keys are set.
 
 ### How to turn it off
 
 1. `make env-set KEY=LANGFUSE_ENABLED VALUE=0`
 2. `make up`
 
-Optional: `LANGFUSE_FLUSH_TIMEOUT_S` (default `5`) bounds client shutdown on worker exit (`tracing.py:_flush_timeout`, 149–156; `tracing_langfuse.py:shutdown`, 202–214).
+Optional: `LANGFUSE_FLUSH_TIMEOUT_S` (default `5`) bounds client shutdown on worker exit (`tracing.py:_flush_timeout`, 169–176; `tracing_langfuse.py:shutdown`, 202–214).
 
 The `tracing` extra (`langfuse` on PyPI) is installed only on the `triage_worker` and `triage` compose build targets via `PIP_EXTRAS: tracing` (`deploy/compose.yml`, build args ~113 and ~135). Only `services/triage/tracing_langfuse.py` imports the Langfuse SDK; other services never load it.
 
