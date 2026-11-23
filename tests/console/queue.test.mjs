@@ -64,6 +64,33 @@ describe("formatQueueAge", () => {
   });
 });
 
+describe("formatCaseId", () => {
+  it("prefixes the id with a hash", () => {
+    assert.equal(queue.formatCaseId(4), "#4");
+    assert.equal(queue.formatCaseId("12"), "#12");
+  });
+
+  it("renders a placeholder when the id is missing", () => {
+    assert.equal(queue.formatCaseId(null), "—");
+    assert.equal(queue.formatCaseId(undefined), "—");
+    assert.equal(queue.formatCaseId(""), "—");
+    assert.equal(queue.formatCaseId("   "), "—");
+  });
+});
+
+describe("queue table markup", () => {
+  it("lists Case as the first column", () => {
+    const html = require("node:fs").readFileSync(
+      path.resolve(import.meta.dirname, "../../console/index.html"),
+      "utf8",
+    );
+    const table = html.match(/<table id="queue-table"[\s\S]*?<\/thead>/);
+    assert.ok(table, "queue table thead is missing");
+    const headers = [...table[0].matchAll(/<th[^>]*>(.*?)<\/th>/g)].map((m) => m[1]);
+    assert.deepEqual(headers, ["Case", "Status", "Severity", "Rule", "Age", "Alert"]);
+  });
+});
+
 describe("resolveLinkTemplate", () => {
   const fallback = "grokbot://app/v1/agent?id=8818388d-d88b-4b48-a907-11dcc6b8547d";
 

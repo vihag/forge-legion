@@ -107,6 +107,13 @@ function formatQueueAge(createdAt, nowMs) {
   return `${days}d`;
 }
 
+function formatCaseId(id) {
+  if (id == null || String(id).trim() === "") {
+    return "—";
+  }
+  return `#${id}`;
+}
+
 function resolveLinkTemplate(cfg, fallback) {
   const raw = cfg && cfg.grokbotCenturionLinkTemplate;
   const value = raw == null ? "" : String(raw).trim();
@@ -558,6 +565,7 @@ const api = {
   humanStatus,
   ruleLabel,
   formatQueueAge,
+  formatCaseId,
   resolveLinkTemplate,
   buildGrokLink,
   isAllowedLinkScheme,

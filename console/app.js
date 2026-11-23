@@ -730,7 +730,7 @@ function renderQueueTable() {
   if (rows.length === 0) {
     const tr = el("tr");
     const td = el("td", "empty", "No open cases in this view");
-    td.colSpan = 5;
+    td.colSpan = 6;
     tr.appendChild(td);
     body.appendChild(tr);
     return;
@@ -742,14 +742,15 @@ function renderQueueTable() {
     if (queueState.selectedId === row.id) {
       tr.classList.add("selected");
     }
+    const idTd = el("td", "case-id mono", L.formatCaseId(row.id));
     const statusTd = el("td");
     statusTd.appendChild(pill(STATUS_LABELS, row.status, "pill"));
     const sevTd = el("td", "sev-cell");
     sevTd.appendChild(severityChip(row.severity || row.splunk_severity));
-    const ruleTd = el("td", null, L.ruleLabel(row));
+    const ruleTd = el("td", "queue-rule", L.ruleLabel(row));
     const ageTd = el("td", null, L.formatQueueAge(row.created_at, now));
     const alertTd = el("td", "alert-id", row.alert_id);
-    tr.append(statusTd, sevTd, ruleTd, ageTd, alertTd);
+    tr.append(idTd, statusTd, sevTd, ruleTd, ageTd, alertTd);
     tr.addEventListener("click", () => {
       selectQueueCase(row.id);
     });
