@@ -55,3 +55,22 @@ markdown_extensions:
 
 plugins:
   - search
+  - glightbox:
+      touchNavigation: true
+      loop: false
+      effect: zoom
+      slide_effect: slide
+      width: auto
+      height: auto
+      zoomable: true
+      draggable: true
+      auto_caption: false
+      caption_position: bottom
+      background: white
+      shadow: true
+
+extra_css:
+  - stylesheets/mermaid-zoom.css
+
+extra_javascript:
+  - javascripts/mermaid-zoom.js
