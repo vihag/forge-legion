@@ -90,6 +90,8 @@ def _tracer_from_sdk(sdk: FakeLangfuseSDK) -> LangfuseTracer:
 
 
 def test_tracing_disabled_no_import() -> None:
+    # Unset or =1 with a missing key stays off; explicit 0 stays off.
+    # Unset + keys => on is covered by test_tracing_on_when_keys_set_enabled_unset.
     cases = [
         {},
         {"LANGFUSE_ENABLED": "0"},
@@ -117,45 +119,40 @@ def test_tracing_disabled_no_import() -> None:
     ["LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_HOST"],
 )
 def test_enabled_but_missing_var_stays_off(missing: str) -> None:
-    env = _enabled_env()
-    env[missing] = ""
     script = f"""
 import logging
-import os, sys
+import sys
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 sys.path.insert(0, {str(ROOT)!r})
 from services.triage.tracing import build_tracer
-t = build_tracer({env!r})
+t = build_tracer()
 print(type(t).__name__, "langfuse" in sys.modules)
 """
-    result = subprocess.run(
-        [sys.executable, "-c", script],
-        env={**os.environ, **env},
-        capture_output=True,
-        text=True,
-        cwd=str(ROOT),
-    )
-    assert result.returncode == 0
-    assert result.stdout.strip() == "NoopTracer False"
-    unset_env = {k: v for k, v in os.environ.items() if not k.startswith("LANGFUSE_")}
-    unset_env["LANGFUSE_ENABLED"] = "1"
-    if missing != "LANGFUSE_PUBLIC_KEY":
-        unset_env["LANGFUSE_PUBLIC_KEY"] = "pk"
-    if missing != "LANGFUSE_SECRET_KEY":
-        unset_env["LANGFUSE_SECRET_KEY"] = "sk"
-    if missing != "LANGFUSE_HOST":
-        unset_env["LANGFUSE_HOST"] = "https://h.invalid"
-    proc_unset = subprocess.run(
-        [sys.executable, "-c", script],
-        env=unset_env,
-        capture_output=True,
-        text=True,
-        cwd=str(ROOT),
-    )
-    assert proc_unset.returncode == 0
-    assert proc_unset.stdout.strip().startswith("NoopTracer False")
     short = missing.removeprefix("LANGFUSE_").lower()
-    assert f"{short}=empty" in proc_unset.stderr
+    clean = {k: v for k, v in os.environ.items() if not k.startswith("LANGFUSE_")}
+    if missing != "LANGFUSE_PUBLIC_KEY":
+        clean["LANGFUSE_PUBLIC_KEY"] = "pk"
+    if missing != "LANGFUSE_SECRET_KEY":
+        clean["LANGFUSE_SECRET_KEY"] = "sk"
+    if missing != "LANGFUSE_HOST":
+        clean["LANGFUSE_HOST"] = "https://h.invalid"
+    # Unset LANGFUSE_ENABLED, or =1, with a missing key => Noop and no SDK import.
+    trials = (
+        {**clean, **_enabled_env(), missing: ""},
+        clean,
+        {**clean, "LANGFUSE_ENABLED": "1"},
+    )
+    for trial in trials:
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            env=trial,
+            capture_output=True,
+            text=True,
+            cwd=str(ROOT),
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip().startswith("NoopTracer False")
+        assert f"{short}=empty" in result.stderr
 
 
 def test_tracing_gating_matrix(caplog: pytest.LogCaptureFixture) -> None:
@@ -172,9 +169,9 @@ def test_tracing_gating_matrix(caplog: pytest.LogCaptureFixture) -> None:
             env["LANGFUSE_HOST"] = "https://h.invalid"
         sdk = FakeLangfuseSDK()
         tracer = build_tracer(env, sdk=sdk)
-        active = (
-            env["LANGFUSE_ENABLED"] == "1"
-            and env["LANGFUSE_PUBLIC_KEY"]
+        # Unset/empty LANGFUSE_ENABLED now means on when all three keys are set.
+        active = bool(
+            env["LANGFUSE_PUBLIC_KEY"]
             and env["LANGFUSE_SECRET_KEY"]
             and env["LANGFUSE_HOST"]
         )
@@ -191,6 +188,25 @@ def test_tracing_gating_matrix(caplog: pytest.LogCaptureFixture) -> None:
     tracer = build_tracer(_enabled_env(), sdk=None, import_langfuse_module=False)
     assert isinstance(tracer, NoopTracer)
     assert any("sdk not installed" in r.message for r in caplog.records)
+
+
+def test_tracing_on_when_keys_set_enabled_unset() -> None:
+    sdk = FakeLangfuseSDK()
+    env_unset = _enabled_env()
+    del env_unset["LANGFUSE_ENABLED"]
+    tracer = build_tracer(env_unset, sdk=sdk)
+    assert isinstance(tracer, LangfuseTracer)
+    tracer_empty = build_tracer(_enabled_env(LANGFUSE_ENABLED=""), sdk=FakeLangfuseSDK())
+    assert isinstance(tracer_empty, LangfuseTracer)
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["0", "false", "no", "off", "FALSE", "No", "Off", " 0 ", " False "],
+)
+def test_tracing_off_when_explicitly_disabled(value: str) -> None:
+    tracer = build_tracer(_enabled_env(LANGFUSE_ENABLED=value), sdk=FakeLangfuseSDK())
+    assert isinstance(tracer, NoopTracer)
 
 
 def test_trace_shape(triage_stack: TriageDeps) -> None:

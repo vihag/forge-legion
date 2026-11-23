@@ -14,7 +14,7 @@ Simulated alert traffic: `make stream-start` runs the Mock Splunk stream at `STR
 
 Verify metrics against case views: `python scripts/metrics_check.py --base http://localhost:8080`.
 
-Optional Langfuse tracing for triage is documented in [Observability](docs/observability.md) (`LANGFUSE_ENABLED=1` plus keys in `.env.local`).
+Optional Langfuse tracing for triage is documented in [Observability](docs/observability.md) (on by default when keys are set in `.env.local`; set `LANGFUSE_ENABLED=0` to disable).
 
 ## Routine webhook (C8)
 
